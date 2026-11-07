@@ -89,7 +89,7 @@ class PythonPadPanel(Gtk.Box):
 
         self.tab_btn_lint = Gtk.RadioButton.new_with_label_from_widget(self.tab_btn_shell, "Pylint Diagnostics")
         self.tab_btn_lint.set_mode(False)
-        self.tab_btn_lint.connect("toggled", lambda b: self._switch_tab(2) if b.get_active() else None)
+        self.tab_btn_lint.connect("toggled", self._on_lint_tab_toggled)
         btn_box.pack_start(self.tab_btn_lint, False, False, 0)
 
         tab_bar.pack_start(btn_box, False, False, 0)
@@ -154,6 +154,12 @@ class PythonPadPanel(Gtk.Box):
         btn.set_tooltip_text("Hide Panel")
         btn.connect("clicked", lambda b: self.emit("close-requested"))
         return btn
+
+    def _on_lint_tab_toggled(self, btn):
+        if btn.get_active():
+            self._switch_tab(2)
+            if not getattr(self, "_in_run_lint", False):
+                self.run_lint()
 
     def select_tab(self, index: int):
         """Programmatically select a panel tab (0=Shell, 1=Runner, 2=Lint) and sync UI."""
@@ -576,7 +582,11 @@ class PythonPadPanel(Gtk.Box):
         if not editor:
             return
 
-        self.select_tab(2)
+        self._in_run_lint = True
+        try:
+            self.select_tab(2)
+        finally:
+            self._in_run_lint = False
 
         content = editor.get_text()
         file_path = editor.file_path

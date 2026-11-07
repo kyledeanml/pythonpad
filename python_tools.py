@@ -259,9 +259,26 @@ class PythonLinter:
     """Runs Pylint or native AST analysis on Python code."""
 
     @staticmethod
-    def is_pylint_available() -> bool:
-        """Check whether pylint is installed in PATH."""
-        return shutil.which("pylint") is not None
+    def _find_pylint_executable():
+        """Locate the pylint executable in PATH, ~/.local/bin, or active interpreter bin."""
+        exe = shutil.which("pylint")
+        if exe:
+            return exe
+        candidates = [
+            os.path.expanduser("~/.local/bin/pylint"),
+            os.path.join(os.path.dirname(InterpreterManager.get_active_interpreter()), "pylint"),
+            "/usr/local/bin/pylint",
+            "/usr/bin/pylint",
+        ]
+        for c in candidates:
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+        return None
+
+    @classmethod
+    def is_pylint_available(cls) -> bool:
+        """Check whether pylint is installed on the system."""
+        return cls._find_pylint_executable() is not None
 
     @classmethod
     def lint(cls, file_path=None, content=""):
@@ -336,8 +353,9 @@ class PythonLinter:
                 print(f"Error creating temp file for pylint: {e}")
                 return None
 
+        pylint_bin = cls._find_pylint_executable() or "pylint"
         cmd = [
-            "pylint",
+            pylint_bin,
             "--output-format=json",
             "--reports=n",
             "--score=n",
