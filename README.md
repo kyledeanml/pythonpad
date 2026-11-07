@@ -92,6 +92,7 @@ The installer automatically:
 - Installs the high-DPI vector icon into `~/.local/share/icons/hicolor/scalable/apps/pythonpad.svg`.
 - Installs the desktop launcher with `StartupWMClass=pythonpad` for window grouping into `~/.local/share/applications/pythonpad.desktop`.
 - Creates a CLI binary symlink at `~/.local/bin/pythonpad`.
+- Registers PythonPad as the default application for opening `.txt` (`text/plain`) and `.py` (`text/x-python`, `text/x-python3`, `application/x-python-code`) files in Linux Mint Cinnamon / Nemo.
 - Adds PythonPad to Cinnamon's application favorites.
 
 ### 4. Put PythonPad on the Cinnamon Panel

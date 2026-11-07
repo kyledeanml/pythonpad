@@ -41,8 +41,8 @@ Exec=$DIR/run.sh %F
 Icon=$ICONS_DIR/pythonpad.svg
 Terminal=false
 Type=Application
-Categories=GTK;GNOME;Development;IDE;
-MimeType=text/plain;text/x-python;text/markdown;text/x-shellscript;
+Categories=GTK;GNOME;Development;IDE;Utility;TextEditor;
+MimeType=text/plain;text/x-python;text/x-python3;application/x-python-code;text/markdown;text/x-shellscript;
 StartupNotify=true
 StartupWMClass=pythonpad
 Keywords=python;editor;ide;retina;vision;pylint;shell;repl;code;text;developer;
@@ -71,7 +71,55 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 fi
 
-# 5. Add to Cinnamon Menu favorites
+# 5. Register PythonPad as the default application for .txt and .py files
+DEFAULT_MIMES=(
+    "text/plain"
+    "text/x-python"
+    "text/x-python3"
+    "application/x-python-code"
+)
+
+if command -v xdg-mime >/dev/null 2>&1; then
+    for mime in "${DEFAULT_MIMES[@]}"; do
+        xdg-mime default pythonpad.desktop "$mime" 2>/dev/null || true
+    done
+    echo "[+] Registered PythonPad via xdg-mime as default handler for .txt and .py files"
+fi
+
+if command -v gio >/dev/null 2>&1; then
+    for mime in "${DEFAULT_MIMES[@]}"; do
+        gio mime "$mime" pythonpad.desktop >/dev/null 2>&1 || true
+    done
+fi
+
+# Ensure ~/.config/mimeapps.list explicitly maps .txt and .py MIME types for Cinnamon / Nemo
+python3 -c "
+import os
+import configparser
+
+mimeapps_path = os.path.expanduser('~/.config/mimeapps.list')
+os.makedirs(os.path.dirname(mimeapps_path), exist_ok=True)
+
+cfg = configparser.ConfigParser(interpolation=None)
+cfg.optionxform = str
+if os.path.exists(mimeapps_path):
+    try:
+        cfg.read(mimeapps_path, encoding='utf-8')
+    except Exception:
+        pass
+
+for section in ('Default Applications', 'Added Associations'):
+    if not cfg.has_section(section):
+        cfg.add_section(section)
+    for mime in ('text/plain', 'text/x-python', 'text/x-python3', 'application/x-python-code'):
+        cfg.set(section, mime, 'pythonpad.desktop;')
+
+with open(mimeapps_path, 'w', encoding='utf-8') as f:
+    cfg.write(f, space_around_delimiters=False)
+" 2>/dev/null || true
+
+# 6. Enable direct execution/opening in Nemo when double-clicking .py/.txt files
+#    and add to Cinnamon Menu favorites
 if command -v gsettings >/dev/null 2>&1; then
     python3 -c "
 import gi

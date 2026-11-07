@@ -148,12 +148,12 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
 
         try:
             ed.file_encoding = "LATIN-1"
-            ed.set_text("print('Unicode \\u2605 symbol')")
+            ed.set_text("print('Unicode \u2605 symbol')")
             ed.save_file(temp_path)
             self.assertEqual(ed.file_encoding, "UTF-8")
             with open(temp_path, "r", encoding="utf-8") as f:
                 saved = f.read()
-            self.assertIn("Unicode \\u2605 symbol", saved)
+            self.assertIn("Unicode \u2605 symbol", saved)
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -237,6 +237,14 @@ class TestAppAssets(unittest.TestCase):
         self.assertIn("[Desktop Entry]", content)
         self.assertIn("Name=PythonPad", content)
         self.assertIn("StartupWMClass=pythonpad", content)
+        self.assertIn("text/plain;", content)
+        self.assertIn("text/x-python;", content)
+
+        install_path = os.path.join(self.base_dir, "install.sh")
+        with open(install_path, 'r') as f:
+            install_content = f.read()
+        self.assertIn("xdg-mime default pythonpad.desktop", install_content)
+        self.assertIn("mimeapps.list", install_content)
 
     def test_scripts_executable(self):
         for script in ['run.sh', 'install.sh', 'pythonpad.py']:
