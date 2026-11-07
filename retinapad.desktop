@@ -1,0 +1,17 @@
+[Desktop Entry]
+Name=RetinaPad
+Comment=Simple notepad with retina vision and line numbers for Linux Mint Cinnamon
+GenericName=Text Editor
+Exec=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/run.sh %F
+Icon=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/retinapad.svg
+Terminal=false
+Type=Application
+Categories=GTK;GNOME;Utility;TextEditor;
+MimeType=text/plain;text/x-python;text/markdown;text/x-shellscript;
+StartupNotify=true
+Keywords=text;editor;notepad;retina;vision;notes;mint;cinnamon;
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=Open a New Window
+Exec=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/run.sh
