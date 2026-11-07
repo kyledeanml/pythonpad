@@ -39,6 +39,13 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         if os.path.exists(icon_path):
             self.set_icon_from_file(icon_path)
 
+        # Dark mode preference & neon blue theme
+        settings = Gtk.Settings.get_default()
+        if settings:
+            settings.set_property("gtk-application-prefer-dark-theme", True)
+        self.current_theme = "pythonpad-neon"
+        self._apply_dark_neon_theme()
+
         # UI Construction
         self._build_header_bar()
         self._build_editor_area()
@@ -56,6 +63,223 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         self.show_all()
         self.search_bar.set_reveal_child(False)
+
+    def _apply_dark_neon_theme(self):
+        """Apply sleek dark mode CSS with white text and neon blue accents across the UI."""
+        styles_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles")
+        if os.path.exists(styles_dir):
+            GtkSource.StyleSchemeManager.get_default().prepend_search_path(styles_dir)
+
+        css = b"""
+        /* PythonPad Dark Neon Theme */
+        window, dialog, .background {
+            background-color: #0b0f19;
+            color: #ffffff;
+        }
+
+        headerbar {
+            background: linear-gradient(to bottom, #111827, #0b0f19);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.35);
+            box-shadow: 0 1px 6px rgba(0, 240, 255, 0.12);
+            color: #ffffff;
+            padding: 4px 6px;
+        }
+        headerbar .title {
+            color: #ffffff;
+            font-weight: bold;
+        }
+        headerbar .subtitle {
+            color: #38bdf8;
+            font-size: 85%;
+        }
+
+        button {
+            background-color: #131d33;
+            color: #ffffff;
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 4px;
+            padding: 4px 8px;
+            transition: all 150ms ease;
+        }
+        button:hover {
+            background-color: #1a2744;
+            border-color: #00f0ff;
+            color: #00f0ff;
+            box-shadow: 0 0 6px rgba(0, 240, 255, 0.35);
+        }
+        button:checked, button:active {
+            background-color: #034b75;
+            border-color: #00f0ff;
+            color: #ffffff;
+            box-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+        }
+
+        .linked > button {
+            border-color: rgba(0, 240, 255, 0.25);
+        }
+        .linked > button:hover {
+            border-color: #00f0ff;
+        }
+
+        notebook {
+            background-color: #070a14;
+        }
+        notebook > header {
+            background-color: #070a14;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        }
+        notebook tab {
+            background-color: #0b0f19;
+            color: #94a3b8;
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            border-bottom: none;
+            padding: 5px 12px;
+            margin-right: 2px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+        }
+        notebook tab:hover {
+            background-color: #131d33;
+            color: #e0f2fe;
+            border-color: rgba(0, 240, 255, 0.4);
+        }
+        notebook tab:checked {
+            background-color: #0a0e1a;
+            color: #ffffff;
+            border-color: #00f0ff;
+            border-top: 2px solid #00f0ff;
+            box-shadow: inset 0 2px 0 #00f0ff;
+        }
+        notebook tab label {
+            color: inherit;
+            font-weight: 500;
+        }
+        notebook tab button {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 0 2px;
+            min-height: 16px;
+            min-width: 16px;
+        }
+        notebook tab button:hover {
+            color: #00f0ff;
+            background-color: rgba(0, 240, 255, 0.15);
+            border-radius: 3px;
+        }
+
+        paned > separator {
+            background-color: #070a14;
+            border-top: 1px solid rgba(0, 240, 255, 0.3);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+            min-height: 6px;
+        }
+        paned > separator:hover {
+            background-color: #00f0ff;
+            box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        }
+
+        .statusbar, #statusbar {
+            background-color: #070a14;
+            border-top: 1px solid rgba(0, 240, 255, 0.2);
+            color: #94a3b8;
+            padding: 2px 8px;
+        }
+        .statusbar label, #statusbar label {
+            color: #cbd5e1;
+            font-size: 88%;
+        }
+
+        .search-bar {
+            background-color: #0d1322;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+        }
+        .bottom-panel-bar {
+            background-color: #0a0e1a;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        }
+
+        label.shell-prompt {
+            color: #00f0ff;
+            font-weight: bold;
+        }
+
+        entry {
+            background-color: #0a0e1a;
+            color: #ffffff;
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        entry:focus {
+            border-color: #00f0ff;
+            box-shadow: 0 0 5px rgba(0, 240, 255, 0.4);
+        }
+
+        textview, textview text {
+            background-color: #0a0e1a;
+            color: #ffffff;
+        }
+
+        menu, .menu {
+            background-color: #0d1322;
+            color: #ffffff;
+            border: 1px solid rgba(0, 240, 255, 0.35);
+            padding: 4px;
+        }
+        menuitem {
+            color: #e0f2fe;
+            padding: 4px 10px;
+        }
+        menuitem:hover {
+            background-color: #034b75;
+            color: #ffffff;
+        }
+        menuitem:disabled {
+            color: #475569;
+        }
+
+        treeview {
+            background-color: #0a0e1a;
+            color: #f8fafc;
+            border: none;
+        }
+        treeview:selected {
+            background-color: #034b75;
+            color: #ffffff;
+        }
+        treeview header button {
+            background-color: #0d1322;
+            color: #00f0ff;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+            font-weight: bold;
+        }
+
+        scrollbar {
+            background-color: #070a14;
+        }
+        scrollbar slider {
+            background-color: #1e293b;
+            border-radius: 4px;
+            min-width: 8px;
+            min-height: 8px;
+        }
+        scrollbar slider:hover {
+            background-color: #0284c7;
+        }
+        scrollbar slider:active {
+            background-color: #00f0ff;
+        }
+        """
+        provider = Gtk.CssProvider()
+        provider.load_from_data(css)
+        screen = Gdk.Screen.get_default()
+        if screen:
+            Gtk.StyleContext.add_provider_for_screen(
+                screen,
+                provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
 
     # --------------------------------------------------------------------------
     # Header Bar
@@ -261,15 +485,18 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         theme_menu = Gtk.Menu()
         manager = GtkSource.StyleSchemeManager.get_default()
         group = []
+        neon_radio = None
         for s_id in manager.get_scheme_ids():
             scheme_obj = manager.get_scheme(s_id)
             title = scheme_obj.get_name() if scheme_obj else s_id
             radio = Gtk.RadioMenuItem(group=group[0] if group else None, label=title)
             group.append(radio)
-            if s_id in ('xed', 'classic'):
-                radio.set_active(True)
+            if s_id == 'pythonpad-neon':
+                neon_radio = radio
             radio.connect("toggled", self._on_theme_selected, s_id)
             theme_menu.append(radio)
+        if neon_radio:
+            neon_radio.set_active(True)
         item_theme.set_submenu(theme_menu)
         menu.append(item_theme)
 
@@ -321,6 +548,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
     def _build_status_bar(self):
         self.status_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        self.status_bar.set_name("statusbar")
+        Gtk.StyleContext.add_class(self.status_bar.get_style_context(), "statusbar")
         self.status_bar.set_margin_start(12)
         self.status_bar.set_margin_end(12)
         self.status_bar.set_margin_top(4)
@@ -355,6 +584,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     def new_tab(self, file_path=None):
         """Create and append a new document tab with a RetinaEditor."""
         editor = RetinaEditor(file_path=file_path)
+        if hasattr(self, 'current_theme') and self.current_theme:
+            editor.set_theme(self.current_theme)
         editor.connect("cursor-moved", self._on_cursor_moved)
         editor.connect("content-modified", self._on_content_modified)
         editor.connect("zoom-changed", self._on_zoom_changed)
@@ -815,8 +1046,10 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
     def _on_theme_selected(self, radio_item, scheme_id):
         if radio_item.get_active():
-            for i in range(self.notebook_tabs.get_n_pages()):
-                self.notebook_tabs.get_nth_page(i).set_theme(scheme_id)
+            self.current_theme = scheme_id
+            if hasattr(self, 'notebook_tabs'):
+                for i in range(self.notebook_tabs.get_n_pages()):
+                    self.notebook_tabs.get_nth_page(i).set_theme(scheme_id)
 
     def on_goto_line(self):
         ed = self.get_current_editor()

@@ -5,6 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$HOME/.local/share/applications"
 ICONS_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 BIN_DIR="$HOME/.local/bin"
+STYLES_DIR="$HOME/.local/share/gtksourceview-4/styles"
 
 echo "=========================================================="
 echo " Installing PythonPad for Linux Mint Cinnamon"
@@ -16,10 +17,15 @@ chmod +x "$DIR/run.sh" "$DIR/pythonpad.py"
 mkdir -p "$APP_DIR"
 mkdir -p "$ICONS_DIR"
 mkdir -p "$BIN_DIR"
+mkdir -p "$STYLES_DIR"
 
-# 1. Install high-DPI vector icon
+# 1. Install high-DPI vector icon & styles
 cp "$DIR/pythonpad.svg" "$ICONS_DIR/pythonpad.svg"
 echo "[+] Installed PythonPad SVG icon: $ICONS_DIR/pythonpad.svg"
+if [ -d "$DIR/styles" ]; then
+    cp -r "$DIR/styles/"* "$STYLES_DIR/"
+    echo "[+] Installed GtkSource style schemes: $STYLES_DIR"
+fi
 
 # 2. Install executable launcher in ~/.local/bin
 ln -sf "$DIR/run.sh" "$BIN_DIR/pythonpad"

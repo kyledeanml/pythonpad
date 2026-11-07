@@ -56,6 +56,7 @@ class SearchBar(Gtk.Revealer):
 
     def _build_ui(self):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        main_box.get_style_context().add_class("search-bar")
         main_box.set_margin_start(10)
         main_box.set_margin_end(10)
         main_box.set_margin_top(6)

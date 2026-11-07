@@ -46,7 +46,9 @@ A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic 
 - **Advanced Match Options**: Toggle Case Sensitivity (`Aa`), Regular Expressions (`.*`), and Whole Word (`\b`).
 
 ### Themes & Customization
-- **Native Cinnamon Themes**: Switch between pre-installed GtkSource schemes:
+- **Dark Mode UI & Neon Blue Accents**: Native GTK dark mode interface featuring crisp white typography, neon cyan/blue indicators, active tab glowing accents, and custom GtkSourceView style scheme (`pythonpad-neon`).
+- **GtkSource Style Schemes**: Switch between color themes (*Menu -> Color Theme*):
+  - `pythonpad-neon` (Default: Dark mode with brilliant white text and neon blue accents)
   - `xed` (Linux Mint native look)
   - `solarized-dark` & `solarized-light` (Designed to reduce eye strain)
   - `oblivion` & `cobalt` (High-contrast dark modes)

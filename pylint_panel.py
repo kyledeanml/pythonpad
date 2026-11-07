@@ -59,6 +59,7 @@ class PythonPadPanel(Gtk.Box):
     def _build_ui(self):
         # Header / Tab Bar
         tab_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        tab_bar.get_style_context().add_class("bottom-panel-bar")
         tab_bar.set_margin_start(8)
         tab_bar.set_margin_end(8)
         tab_bar.set_margin_top(4)
@@ -194,12 +195,12 @@ class PythonPadPanel(Gtk.Box):
         self.shell_view.set_top_margin(6)
         self.shell_view.set_bottom_margin(6)
 
-        # Shell color tags
-        self.tag_prompt = self.shell_buffer.create_tag("prompt", foreground="#3498db", weight=Pango.Weight.BOLD)
-        self.tag_input = self.shell_buffer.create_tag("input", foreground="#2ecc71")
-        self.tag_out = self.shell_buffer.create_tag("output")
-        self.tag_err = self.shell_buffer.create_tag("error", foreground="#e74c3c")
-        self.tag_banner = self.shell_buffer.create_tag("banner", foreground="#95a5a6", style=Pango.Style.ITALIC)
+        # Shell color tags (Dark mode with white and neon blue hues)
+        self.tag_prompt = self.shell_buffer.create_tag("prompt", foreground="#00f0ff", weight=Pango.Weight.BOLD)
+        self.tag_input = self.shell_buffer.create_tag("input", foreground="#ffffff", weight=Pango.Weight.BOLD)
+        self.tag_out = self.shell_buffer.create_tag("output", foreground="#e0f2fe")
+        self.tag_err = self.shell_buffer.create_tag("error", foreground="#f43f5e")
+        self.tag_banner = self.shell_buffer.create_tag("banner", foreground="#38bdf8", style=Pango.Style.ITALIC)
 
         scrolled.add(self.shell_view)
         box.pack_start(scrolled, True, True, 0)
@@ -211,7 +212,7 @@ class PythonPadPanel(Gtk.Box):
         entry_box.set_margin_bottom(4)
 
         self.lbl_prompt = Gtk.Label(label=">>> ")
-        self.lbl_prompt.get_style_context().add_class("dim-label")
+        self.lbl_prompt.get_style_context().add_class("shell-prompt")
         entry_box.pack_start(self.lbl_prompt, False, False, 0)
 
         self.shell_entry = Gtk.Entry()
@@ -306,10 +307,10 @@ class PythonPadPanel(Gtk.Box):
         self.console_view.set_top_margin(8)
         self.console_view.set_bottom_margin(8)
 
-        self.tag_stdout = self.console_buffer.create_tag("stdout")
-        self.tag_stderr = self.console_buffer.create_tag("stderr", foreground="#e74c3c")
-        self.tag_system = self.console_buffer.create_tag("system", foreground="#3498db", weight=Pango.Weight.BOLD)
-        self.tag_success = self.console_buffer.create_tag("success", foreground="#2ecc71", weight=Pango.Weight.BOLD)
+        self.tag_stdout = self.console_buffer.create_tag("stdout", foreground="#f8fafc")
+        self.tag_stderr = self.console_buffer.create_tag("stderr", foreground="#f43f5e")
+        self.tag_system = self.console_buffer.create_tag("system", foreground="#00f0ff", weight=Pango.Weight.BOLD)
+        self.tag_success = self.console_buffer.create_tag("success", foreground="#22d3ee", weight=Pango.Weight.BOLD)
 
         scrolled.add(self.console_view)
         self.notebook.add_named(scrolled, "console")

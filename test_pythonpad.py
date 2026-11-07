@@ -84,7 +84,10 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
         manager = GtkSource.StyleSchemeManager.get_default()
         schemes = manager.get_scheme_ids()
         self.assertTrue(len(schemes) > 0)
-        self.assertTrue(any(s in schemes for s in ['xed', 'classic', 'tango', 'oblivion']))
+        self.assertIn('pythonpad-neon', schemes)
+        neon_scheme = manager.get_scheme('pythonpad-neon')
+        self.assertIsNotNone(neon_scheme)
+        self.assertEqual(neon_scheme.get_name(), 'Neon Blue & White')
 
 
 class TestAppAssets(unittest.TestCase):

@@ -16,6 +16,12 @@ gi.require_version('Pango', '1.0')
 from gi.repository import Gtk, Gdk, GtkSource, Pango, GObject
 
 
+# Ensure styles directory is in GtkSource StyleSchemeManager path
+_styles_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles")
+if os.path.exists(_styles_dir):
+    GtkSource.StyleSchemeManager.get_default().prepend_search_path(_styles_dir)
+
+
 class RetinaEditor(Gtk.ScrolledWindow):
     """
     Retina-optimized text editor widget with line numbers,
@@ -63,7 +69,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
         # Apply default font & theme
         self.apply_retina_font()
-        self.set_theme("xed")  # Fallback to default Mint scheme or classic
+        self.set_theme("pythonpad-neon")  # Dark mode with white and neon blue hue
 
         if file_path:
             self.load_file(file_path)
@@ -91,11 +97,17 @@ class RetinaEditor(Gtk.ScrolledWindow):
         css_provider = Gtk.CssProvider()
         css = b"""
         textview {
-            font-feature-settings: "liga" 1, "calt" 1;
+            font-feature-settings: "liga 1, calt 1";
+            background-color: #0a0e1a;
+            color: #ffffff;
+        }
+        textview text {
+            background-color: #0a0e1a;
+            color: #ffffff;
         }
         textview border {
-            background-color: alpha(@theme_bg_color, 0.95);
-            border-right: 1px solid alpha(@borders, 0.35);
+            background-color: #070a14;
+            border-right: 1px solid rgba(0, 240, 255, 0.25);
             padding-right: 8px;
             padding-left: 6px;
         }
@@ -199,8 +211,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
         manager = GtkSource.StyleSchemeManager.get_default()
         scheme = manager.get_scheme(scheme_id)
         if not scheme:
-            # Fallback to classic or tango
-            for fallback in ['xed', 'classic', 'tango', 'oblivion']:
+            # Fallback
+            for fallback in ['pythonpad-neon', 'oblivion', 'cobalt', 'xed', 'classic']:
                 scheme = manager.get_scheme(fallback)
                 if scheme:
                     break
