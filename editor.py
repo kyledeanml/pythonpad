@@ -156,14 +156,14 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
     @classmethod
     def _get_watermark_pixbuf(cls):
-        """Load and cache the translucent Python logo on yoga pad SVG pixbuf."""
+        """Load and cache the official PythonPad SVG (Python logo on yoga pad) for the editor background."""
         if not cls._watermark_loaded:
             cls._watermark_loaded = True
-            svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor_watermark.svg")
+            svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
             if os.path.exists(svg_path):
                 try:
                     cls._watermark_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                        svg_path, 340, 300, True
+                        svg_path, 340, 340, True
                     )
                 except Exception:
                     cls._watermark_pixbuf = None
@@ -199,7 +199,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
             cr.save()
             cr.set_operator(cairo.OPERATOR_OVER)
             Gdk.cairo_set_source_pixbuf(cr, pixbuf, x, y)
-            cr.paint_with_alpha(0.85)
+            cr.paint_with_alpha(0.32)
             cr.restore()
         except Exception:
             pass
