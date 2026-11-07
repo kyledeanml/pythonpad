@@ -67,6 +67,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.base_font_family = "Monospace"
         self.base_font_size = 11
         self.zoom_index = self.DEFAULT_ZOOM_INDEX
+        self._last_scroll_zoom_time = 0
+        self._font_css_provider = None
 
         # GtkSource setup
         self.source_buffer = GtkSource.Buffer()
@@ -222,21 +224,43 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
     def _on_scroll_event(self, widget, event):
         """Handle Ctrl + Mouse Wheel zoom in/out reliably across X11 and smooth-scroll devices."""
-        if event.state & Gdk.ModifierType.CONTROL_MASK:
-            if event.direction == Gdk.ScrollDirection.UP:
-                self.zoom_in()
-                return True
-            elif event.direction == Gdk.ScrollDirection.DOWN:
-                self.zoom_out()
-                return True
-            elif event.direction == Gdk.ScrollDirection.SMOOTH:
-                _, dy = event.get_scroll_deltas()
-                if dy < -0.01:
+        state = getattr(event, "state", 0)
+        if not state and hasattr(event, "get_state"):
+            ok, st = event.get_state()
+            if ok:
+                state = st
+        if state & Gdk.ModifierType.CONTROL_MASK:
+            ev_time = getattr(event, "time", 0)
+            direction = getattr(event, "direction", None)
+            if direction is None and hasattr(event, "get_scroll_direction"):
+                ok_d, d = event.get_scroll_direction()
+                if ok_d:
+                    direction = d
+
+            if direction == Gdk.ScrollDirection.UP:
+                if not ev_time or ev_time != self._last_scroll_zoom_time:
+                    self._last_scroll_zoom_time = ev_time
                     self.zoom_in()
+                return True
+            elif direction == Gdk.ScrollDirection.DOWN:
+                if not ev_time or ev_time != self._last_scroll_zoom_time:
+                    self._last_scroll_zoom_time = ev_time
+                    self.zoom_out()
+                return True
+            elif direction == Gdk.ScrollDirection.SMOOTH:
+                res = event.get_scroll_deltas() if hasattr(event, "get_scroll_deltas") else ()
+                dy = res[-1] if res else getattr(event, "delta_y", 0.0)
+                if dy < -0.01:
+                    if not ev_time or ev_time != self._last_scroll_zoom_time:
+                        self._last_scroll_zoom_time = ev_time
+                        self.zoom_in()
                     return True
                 elif dy > 0.01:
-                    self.zoom_out()
+                    if not ev_time or ev_time != self._last_scroll_zoom_time:
+                        self._last_scroll_zoom_time = ev_time
+                        self.zoom_out()
                     return True
+                return True
         return False
 
     # --------------------------------------------------------------------------
@@ -277,6 +301,23 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
         font_desc = Pango.FontDescription(f"{self.base_font_family} {scaled_size}")
         self.source_view.override_font(font_desc)
+        try:
+            if self._font_css_provider is None:
+                self._font_css_provider = Gtk.CssProvider()
+                self.source_view.get_style_context().add_provider(
+                    self._font_css_provider,
+                    Gtk.STYLE_PROVIDER_PRIORITY_USER
+                )
+            css_str = (
+                f"textview, textview text {{ "
+                f"font-family: \"{self.base_font_family}\", monospace; "
+                f"font-size: {scaled_size}pt; "
+                f"}}"
+            )
+            self._font_css_provider.load_from_data(css_str.encode("utf-8"))
+        except Exception:
+            pass
+        self.source_view.queue_draw()
 
     def set_font_family_and_size(self, family, size):
         """Update base font family and size."""
