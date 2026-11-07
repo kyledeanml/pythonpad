@@ -1,17 +1,18 @@
 [Desktop Entry]
 Name=RetinaPad
-Comment=Simple notepad with retina vision and line numbers for Linux Mint Cinnamon
-GenericName=Text Editor
-Exec=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/run.sh %F
-Icon=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/retinapad.svg
+Comment=Simple notepad with retina vision, line numbers, and pylint viewer for Linux Mint Cinnamon
+GenericName=Text & Python Editor
+Exec=run.sh %F
+Icon=retinapad
 Terminal=false
 Type=Application
 Categories=GTK;GNOME;Utility;TextEditor;
 MimeType=text/plain;text/x-python;text/markdown;text/x-shellscript;
 StartupNotify=true
-Keywords=text;editor;notepad;retina;vision;notes;mint;cinnamon;
+StartupWMClass=retinapad
+Keywords=text;editor;notepad;retina;vision;notes;mint;cinnamon;python;pylint;code;
 Actions=NewWindow;
 
 [Desktop Action NewWindow]
 Name=Open a New Window
-Exec=/home/bluechile/.gemini/antigravity/scratch/retina-notepad/run.sh
+Exec=run.sh

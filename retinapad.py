@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetinaPad - Simple Notepad with Retina Vision and Line Numbers
+RetinaPad - Simple Notepad with Retina Vision, Line Numbers, and Pylint Viewer
 Designed specifically for Linux Mint Cinnamon.
 """
 
@@ -17,20 +17,22 @@ gi.require_version('Pango', '1.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GtkSource, Pango, GLib, Gio
 from editor import RetinaEditor
 from search_bar import SearchBar
+from pylint_panel import PylintPanel
 
 
 class RetinaPadWindow(Gtk.ApplicationWindow):
     """Main application window for RetinaPad."""
 
     APP_NAME = "RetinaPad"
-    APP_VERSION = "1.0"
+    APP_VERSION = "1.1"
 
     def __init__(self, app, file_path=None):
         super().__init__(application=app, title=self.APP_NAME)
-        self.set_default_size(950, 650)
+        self.set_default_size(980, 680)
         self.set_position(Gtk.WindowPosition.CENTER)
 
-        # Set window icon if available
+        # Set WM Class and Window Icon
+        self.set_wmclass("retinapad", "RetinaPad")
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "retinapad.svg")
         if os.path.exists(icon_path):
             self.set_icon_from_file(icon_path)
@@ -86,7 +88,40 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
 
         self.header.pack_start(btn_box)
 
-        # Right controls: Zoom In/Out, Line Numbers Toggle, Search, Menu
+        # Right controls:
+        # Menu Button
+        self.header.pack_end(self._build_menu_button())
+
+        # Line numbers toggle button
+        self.btn_line_numbers = Gtk.ToggleButton()
+        self.btn_line_numbers.set_image(Gtk.Image.new_from_icon_name("format-indent-more-symbolic", Gtk.IconSize.BUTTON))
+        self.btn_line_numbers.set_active(True)
+        self.btn_line_numbers.set_tooltip_text("Toggle Line Numbers")
+        self.btn_line_numbers.connect("toggled", self._on_toggle_line_numbers)
+        self.header.pack_end(self.btn_line_numbers)
+
+        # Python Tools: Run Script & Pylint Diagnostics
+        py_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        Gtk.StyleContext.add_class(py_box.get_style_context(), "linked")
+
+        self.btn_run = Gtk.Button.new_from_icon_name("media-playback-start-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_run.set_tooltip_text("Run Python Script (F5)")
+        self.btn_run.connect("clicked", lambda w: self.run_python_script())
+        py_box.pack_start(self.btn_run, False, False, 0)
+
+        self.btn_lint = Gtk.Button.new_from_icon_name("system-run-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_lint.set_tooltip_text("Pylint & Diagnostics (F8 / Ctrl+Shift+L)")
+        self.btn_lint.connect("clicked", lambda w: self.toggle_pylint_panel())
+        py_box.pack_start(self.btn_lint, False, False, 0)
+
+        self.header.pack_end(py_box)
+
+        # Find button
+        self.btn_search = Gtk.Button.new_from_icon_name("edit-find-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_search.set_tooltip_text("Find and Replace (Ctrl+F)")
+        self.btn_search.connect("clicked", lambda w: self.search_bar.show_find())
+        self.header.pack_end(self.btn_search)
+
         # Zoom controls (Retina scaling)
         zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         Gtk.StyleContext.add_class(zoom_box.get_style_context(), "linked")
@@ -105,22 +140,6 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         self.btn_zoom_in.set_tooltip_text("Zoom In (Ctrl++)")
         self.btn_zoom_in.connect("clicked", lambda w: self.editor.zoom_in())
         zoom_box.pack_start(self.btn_zoom_in, False, False, 0)
-
-        self.header.pack_end(self._build_menu_button())
-
-        # Line numbers toggle button
-        self.btn_line_numbers = Gtk.ToggleButton()
-        self.btn_line_numbers.set_image(Gtk.Image.new_from_icon_name("format-indent-more-symbolic", Gtk.IconSize.BUTTON))
-        self.btn_line_numbers.set_active(True)
-        self.btn_line_numbers.set_tooltip_text("Toggle Line Numbers")
-        self.btn_line_numbers.connect("toggled", self._on_toggle_line_numbers)
-        self.header.pack_end(self.btn_line_numbers)
-
-        # Find button
-        self.btn_search = Gtk.Button.new_from_icon_name("edit-find-symbolic", Gtk.IconSize.BUTTON)
-        self.btn_search.set_tooltip_text("Find and Replace (Ctrl+F)")
-        self.btn_search.connect("clicked", lambda w: self.search_bar.show_find())
-        self.header.pack_end(self.btn_search)
 
         self.header.pack_end(zoom_box)
 
@@ -141,6 +160,17 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         item_goto = Gtk.MenuItem(label="Go to Line... (Ctrl+G)")
         item_goto.connect("activate", lambda w: self.on_goto_line())
         menu.append(item_goto)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # Python actions
+        item_run = Gtk.MenuItem(label="Run Python Script (F5)")
+        item_run.connect("activate", lambda w: self.run_python_script())
+        menu.append(item_run)
+
+        item_lint = Gtk.MenuItem(label="Pylint Diagnostics (F8)")
+        item_lint.connect("activate", lambda w: self.toggle_pylint_panel())
+        menu.append(item_lint)
 
         menu.append(Gtk.SeparatorMenuItem())
 
@@ -198,14 +228,26 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         return menu_button
 
     def _build_editor_area(self):
-        """Builds main editor container with embedded search revealer."""
+        """Builds main editor container with paned bottom Pylint panel."""
         self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         self.editor = RetinaEditor()
         self.search_bar = SearchBar(self.editor)
 
         self.vbox.pack_start(self.search_bar, False, False, 0)
-        self.vbox.pack_start(self.editor, True, True, 0)
+
+        # Vertical paned container (editor on top, pylint panel on bottom)
+        self.paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
+        self.paned.pack1(self.editor, resize=True, shrink=False)
+
+        self.pylint_panel = PylintPanel(lambda: self.editor)
+        self.pylint_panel.connect("goto-location", lambda p, l, c: self.editor.goto_line_col(l, c))
+        self.pylint_panel.connect("close-requested", lambda p: self.toggle_pylint_panel(force_show=False))
+        self.pylint_panel.set_no_show_all(True)
+        self.pylint_panel.set_visible(False)
+
+        self.paned.pack2(self.pylint_panel, resize=False, shrink=True)
+        self.vbox.pack_start(self.paned, True, True, 0)
 
         # Connect editor signals
         self.editor.connect("cursor-moved", self._on_cursor_moved)
@@ -255,6 +297,9 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
             ("f", Gdk.ModifierType.CONTROL_MASK, lambda: self.search_bar.show_find()),
             ("h", Gdk.ModifierType.CONTROL_MASK, lambda: self.search_bar.show_replace()),
             ("g", Gdk.ModifierType.CONTROL_MASK, lambda: self.on_goto_line()),
+            ("F5", 0, lambda: self.run_python_script()),
+            ("F8", 0, lambda: self.toggle_pylint_panel()),
+            ("l", Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK, lambda: self.toggle_pylint_panel()),
             ("plus", Gdk.ModifierType.CONTROL_MASK, lambda: self.editor.zoom_in()),
             ("equal", Gdk.ModifierType.CONTROL_MASK, lambda: self.editor.zoom_in()),
             ("minus", Gdk.ModifierType.CONTROL_MASK, lambda: self.editor.zoom_out()),
@@ -265,7 +310,30 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
 
         for key_str, mod, callback in shortcuts:
             keyval = Gdk.keyval_from_name(key_str)
-            accel_group.connect(keyval, mod, Gtk.AccelFlags.VISIBLE, lambda ag, w, kv, m, cb=callback: cb())
+            if keyval != 0:
+                accel_group.connect(keyval, mod, Gtk.AccelFlags.VISIBLE, lambda ag, w, kv, m, cb=callback: cb())
+
+    # --------------------------------------------------------------------------
+    # Python & Pylint Panel Handling
+    # --------------------------------------------------------------------------
+    def toggle_pylint_panel(self, force_show=None):
+        """Toggle bottom Pylint / Python diagnostics panel."""
+        show = (not self.pylint_panel.get_visible()) if force_show is None else force_show
+        self.pylint_panel.set_visible(show)
+        if show:
+            win_h = self.get_size()[1]
+            self.paned.set_position(max(200, win_h - 240))
+            self.pylint_panel.run_lint()
+
+    def run_python_script(self):
+        """Execute the active file inside Python Console."""
+        if not self.editor.file_path or self.editor.is_modified():
+            if not self.on_save():
+                return
+        self.pylint_panel.set_visible(True)
+        win_h = self.get_size()[1]
+        self.paned.set_position(max(200, win_h - 240))
+        self.pylint_panel.run_script()
 
     # --------------------------------------------------------------------------
     # Signal Handlers & Updates
@@ -288,6 +356,9 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         self.current_filename = os.path.basename(path)
         self.update_title()
         self.lbl_encoding.set_text(self.editor.file_encoding)
+        # If lint panel is open and active, refresh lint
+        if self.pylint_panel.get_visible() and self.pylint_panel.tab_btn_lint.get_active():
+            self.pylint_panel.run_lint()
 
     def _on_toggle_line_numbers(self, button):
         self.editor.set_show_line_numbers(button.get_active())
@@ -338,6 +409,9 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
             self.current_filename = os.path.basename(path)
             self.update_title()
             self.lbl_encoding.set_text(self.editor.file_encoding)
+            # If opened file is python, can automatically prepare linting
+            if path.endswith(".py") and self.pylint_panel.get_visible():
+                self.pylint_panel.run_lint()
         except Exception as e:
             self._show_error_dialog(f"Could not open file:\n{e}")
 
@@ -363,7 +437,7 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         if self.editor.file_path:
             dialog.set_filename(self.editor.file_path)
         else:
-            dialog.set_current_name("Untitled.txt")
+            dialog.set_current_name("Untitled.py")
         self._add_file_filters(dialog)
 
         response = dialog.run()
@@ -379,12 +453,17 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         return success
 
     def _add_file_filters(self, dialog):
+        filter_py = Gtk.FileFilter()
+        filter_py.set_name("Python Scripts (*.py, *.pyw)")
+        filter_py.add_pattern("*.py")
+        filter_py.add_pattern("*.pyw")
+        dialog.add_filter(filter_py)
+
         filter_text = Gtk.FileFilter()
-        filter_text.set_name("Text Files (*.txt, *.md, *.py, ...)")
+        filter_text.set_name("Text & Code Files (*.txt, *.md, *.json, *.sh)")
         filter_text.add_mime_type("text/*")
         filter_text.add_pattern("*.txt")
         filter_text.add_pattern("*.md")
-        filter_text.add_pattern("*.py")
         filter_text.add_pattern("*.sh")
         filter_text.add_pattern("*.json")
         dialog.add_filter(filter_text)
@@ -494,7 +573,7 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
             f"• <b>Current Editor Zoom:</b> {self.editor.get_zoom_percent()}%\n"
             f"• <b>Font Subpixel Antialiasing:</b> Cairo RGBA Subpixel Enabled\n\n"
             f"<i>Tip for Linux Mint Cinnamon:</i>\n"
-            f"You can adjust system-wide HiDPI scaling in <b>Cinnamon Settings → General → Desktop Scaling</b> (Normal or Double), "
+            f"You can adjust system-wide HiDPI scaling in <b>Cinnamon Settings -> General -> Desktop Scaling</b> (Normal or Double), "
             f"or use RetinaPad's real-time <b>Ctrl + Scroll Wheel</b> for smooth font magnification."
         )
 
@@ -514,10 +593,11 @@ class RetinaPadWindow(Gtk.ApplicationWindow):
         dialog.set_program_name(self.APP_NAME)
         dialog.set_version(self.APP_VERSION)
         dialog.set_comments(
-            "A fast, elegant notepad with Retina Vision (HiDPI dynamic font scaling, subpixel rendering) "
-            "and line numbers, tailored for Linux Mint Cinnamon."
+            "A fast, elegant notepad with Retina Vision (HiDPI font scaling), "
+            "line numbers, and integrated Pylint diagnostics / Python runner for Linux Mint Cinnamon."
         )
-        dialog.set_website_label("RetinaPad on Linux Mint")
+        dialog.set_website_label("RetinaPad on GitHub")
+        dialog.set_website("https://github.com/kyledeanml/retina-notepad")
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "retinapad.svg")
         if os.path.exists(icon_path):
             dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 96, 96, True))
@@ -559,6 +639,8 @@ class RetinaPadApp(Gtk.Application):
 
 
 def main():
+    GLib.set_prgname("retinapad")
+    GLib.set_application_name("RetinaPad")
     app = RetinaPadApp()
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         app.file_to_open = os.path.abspath(sys.argv[1])

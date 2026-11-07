@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unit and Integration Tests for RetinaPad
-Tests editor logic, retina zoom scaling, desktop validation, and icon integrity.
+Tests editor logic, retina zoom scaling, desktop validation, and Python/Pylint tools.
 """
 
 import os
@@ -13,6 +13,7 @@ gi.require_version('GtkSource', '4')
 from gi.repository import GtkSource
 
 from editor import RetinaEditor
+from python_tools import PythonLinter, PythonRunner, Diagnostic
 
 
 class TestRetinaEditorLogic(unittest.TestCase):
@@ -35,13 +36,42 @@ class TestRetinaEditorLogic(unittest.TestCase):
         manager = GtkSource.StyleSchemeManager.get_default()
         schemes = manager.get_scheme_ids()
         self.assertTrue(len(schemes) > 0)
-        # Check standard schemes
         self.assertTrue(any(s in schemes for s in ['xed', 'classic', 'tango', 'oblivion']))
 
     def test_gtksource_languages_available(self):
         manager = GtkSource.LanguageManager.get_default()
         lang_py = manager.get_language('python3') or manager.get_language('python')
         self.assertIsNotNone(lang_py)
+
+
+class TestPythonTools(unittest.TestCase):
+    """Test Python AST syntax inspection and Pylint fallback engine."""
+
+    def test_valid_python_lint(self):
+        code = "def add(a, b):\n    return a + b\n"
+        diags, summary, used = PythonLinter.lint(content=code)
+        self.assertEqual(len(diags), 0)
+        self.assertIn("OK", summary)
+
+    def test_syntax_error_detection(self):
+        bad_code = "def broken(\n    print('unclosed')\n"
+        diags, summary, used = PythonLinter.lint(content=bad_code)
+        self.assertGreater(len(diags), 0)
+        self.assertEqual(diags[0].severity, "error")
+        self.assertEqual(diags[0].line, 1)
+        self.assertIn("Syntax", summary)
+
+    def test_diagnostic_object(self):
+        d = Diagnostic(line=10, column=4, severity="warning", code="W0611", message="Unused import", symbol="unused-import")
+        self.assertEqual(d.line, 10)
+        self.assertEqual(d.column, 4)
+        self.assertEqual(d.severity, "warning")
+        self.assertEqual(d.code, "W0611")
+        self.assertIn("W0611", repr(d))
+
+    def test_python_runner_init(self):
+        runner = PythonRunner()
+        self.assertFalse(runner.is_running)
 
 
 class TestAppAssets(unittest.TestCase):
@@ -69,6 +99,7 @@ class TestAppAssets(unittest.TestCase):
         self.assertIn("[Desktop Entry]", content)
         self.assertIn("Name=RetinaPad", content)
         self.assertIn("Categories=GTK;GNOME;Utility;TextEditor;", content)
+        self.assertIn("StartupWMClass=retinapad", content)
 
     def test_scripts_executable(self):
         for script in ['run.sh', 'install.sh', 'retinapad.py']:

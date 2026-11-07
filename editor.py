@@ -239,13 +239,22 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
     def goto_line(self, line_number: int):
         """Jump cursor to a specific 1-based line number."""
+        self.goto_line_col(line_number, 1)
+
+    def goto_line_col(self, line_number: int, column: int = 1):
+        """Jump cursor to a specific 1-based line and column, and scroll to view."""
         buf = self.source_buffer
         total_lines = buf.get_line_count()
         target_line = max(0, min(line_number - 1, total_lines - 1))
 
         iter_at_line = buf.get_iter_at_line(target_line)
+        line_length = iter_at_line.get_chars_in_line()
+        offset = max(0, min(column - 1, max(0, line_length - 1)))
+        iter_at_line.forward_chars(offset)
+
         buf.place_cursor(iter_at_line)
-        self.source_view.scroll_to_iter(iter_at_line, 0.1, False, 0.0, 0.0)
+        self.source_view.scroll_to_iter(iter_at_line, 0.25, False, 0.0, 0.0)
+        self.source_view.grab_focus()
 
     # --------------------------------------------------------------------------
     # Document Stats
