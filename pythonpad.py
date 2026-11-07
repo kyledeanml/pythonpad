@@ -9,6 +9,8 @@ Designed for Linux Mint Cinnamon.
 import sys
 import os
 import shlex
+
+sys.dont_write_bytecode = True
 import gi
 
 gi.require_version('Gtk', '3.0')

@@ -6,7 +6,10 @@ retina zoom scaling, and desktop asset integrity.
 """
 
 import os
+import sys
 import tempfile
+
+sys.dont_write_bytecode = True
 import threading
 import unittest
 import xml.etree.ElementTree as ET

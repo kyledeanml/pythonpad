@@ -1,6 +1,9 @@
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .pytest_cache/
+.pythonpad_save_*
+.pythonpad_lint_*
+*.swp
+*~
 bin/
