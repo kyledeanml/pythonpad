@@ -35,14 +35,27 @@ class Diagnostic:
 class InterpreterManager:
     """Detects and manages system base and custom Python interpreters."""
 
-    DEFAULT_INTERPRETER = sys.executable or "/usr/bin/python3"
     _active_interpreter = None
+
+    @classmethod
+    def get_default_interpreter(cls) -> str:
+        candidates = [
+            os.path.expanduser("~/.local/bin/python3"),
+            "/usr/local/bin/Python-3.12.16/python",
+            shutil.which("python3"),
+            sys.executable,
+            "/usr/bin/python3",
+        ]
+        for c in candidates:
+            if c and os.path.exists(c) and os.path.isfile(c) and os.access(c, os.X_OK):
+                return os.path.realpath(c)
+        return sys.executable or "/usr/bin/python3"
 
     @classmethod
     def get_active_interpreter(cls) -> str:
         if cls._active_interpreter and os.path.exists(cls._active_interpreter):
             return cls._active_interpreter
-        return cls.DEFAULT_INTERPRETER
+        return cls.get_default_interpreter()
 
     @classmethod
     def set_active_interpreter(cls, path: str):
@@ -63,10 +76,13 @@ class InterpreterManager:
         """Scan standard Linux paths for installed Python interpreters."""
         found = []
         candidates = [
+            os.path.expanduser("~/.local/bin/python3"),
+            "/usr/local/bin/Python-3.12.16/python",
             "/usr/bin/python3",
             "/usr/bin/python3.12",
             "/usr/bin/python3.11",
             "/usr/bin/python3.10",
+            shutil.which("python3"),
             sys.executable,
         ]
         seen = set()
