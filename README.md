@@ -4,7 +4,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 ### 👁️ Retina Vision (HiDPI & Sharp Typography)
 - **Dynamic Retina Zooming**: Scale the text size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
@@ -12,18 +12,18 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 - **Scalable Vector Artwork**: High-definition SVG application icon (`retinapad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
 - **Retina Diagnostics**: Built-in monitor resolution, display scale factor, and Cairo subpixel diagnostics dialog (*Menu → Retina Vision / HiDPI Info*).
 
-### 🔢 Crisp Line Numbers & Navigation
+### Crisp Line Numbers & Navigation
 - **Line Numbers Gutter**: High-contrast, beautifully padded line numbers margin that scales proportionally with the font size.
 - **Active Line Highlighting**: Subtly highlights the current line to keep your focus.
 - **Go to Line (`Ctrl + G`)**: Instantly jump to any line in your document.
 - **One-Click Toggle**: Turn line numbers on or off anytime with the headerbar toggle button.
 
-### 🔍 Integrated Search & Replace
+### Integrated Search & Replace
 - **Non-blocking Search Bar (`Ctrl + F`)**: Find occurrences with live match counting.
 - **Full Replace (`Ctrl + H`)**: Single replace or "Replace All".
 - **Advanced Match Options**: Toggle Case Sensitivity (`Aa`), Regular Expressions (`.*`), and Whole Word (`\b`).
 
-### 🎨 Themes & Customization
+### Themes & Customization
 - **Native Cinnamon Themes**: Switch between pre-installed GtkSource schemes:
   - `xed` (Linux Mint native look)
   - `solarized-dark` & `solarized-light` (Designed to reduce eye strain)
@@ -32,7 +32,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 - **Font Selector**: Pick any installed monospace font (e.g. *DejaVu Sans Mono*, *Liberation Mono*, *Fira Code*, *JetBrains Mono*).
 - **Word Wrap**: Toggleable word wrap mode (`Menu → Word Wrap`).
 
-### 📊 Real-Time Status Bar
+### Real-Time Status Bar
 - Cursor Position: `Ln X, Col Y`
 - Document Metrics: `X lines, Y words, Z chars`
 - Retina Zoom Level: `Retina: 100%`
@@ -40,7 +40,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Launch Directly
 To launch RetinaPad immediately from the terminal:
@@ -63,7 +63,7 @@ cd /home/bluechile/.gemini/antigravity/scratch/retina-notepad
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
@@ -84,7 +84,7 @@ cd /home/bluechile/.gemini/antigravity/scratch/retina-notepad
 
 ---
 
-## 🖥️ Linux Mint HiDPI Display Settings Tip
+## Linux Mint HiDPI Display Settings Tip
 
 For high-resolution monitors on Linux Mint Cinnamon:
 1. Open **System Settings → General**.
