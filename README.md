@@ -6,7 +6,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 
 ## Key Features
 
-### 👁️ Retina Vision (HiDPI & Sharp Typography)
+### Retina Vision (HiDPI & Sharp Typography)
 - **Dynamic Retina Zooming**: Scale the text size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
 - **Cairo Subpixel Anti-Aliasing**: Fine-tuned CSS rules and Pango font descriptions preserve crisp glyph rendering on high-resolution displays (Full HD, 2K, 3K, 4K, and Apple Retina screens).
 - **Scalable Vector Artwork**: High-definition SVG application icon (`retinapad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
