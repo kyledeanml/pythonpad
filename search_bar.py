@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-RetinaPad - Search & Replace Component
+PythonPad - Search & Replace Component
 Provides an integrated search and replace overlay/bar with GtkSource.SearchContext.
+Supports dynamic editor attachment across multiple document tabs.
 """
 
 import gi
@@ -15,16 +16,17 @@ from gi.repository import Gtk, Gdk, GtkSource, GObject
 
 class SearchBar(Gtk.Revealer):
     """
-    Search and Replace toolbar that reveals/hides smoothly and connects to RetinaEditor.
+    Search and Replace toolbar that reveals/hides smoothly and connects to the active RetinaEditor.
     """
 
     __gsignals__ = {
         'closed': (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
 
-    def __init__(self, editor):
+    def __init__(self, editor=None):
         super().__init__()
-        self.editor = editor
+        self.editor = None
+        self.search_context = None
         self.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
         self.set_transition_duration(150)
 
@@ -32,15 +34,25 @@ class SearchBar(Gtk.Revealer):
         self.search_settings = GtkSource.SearchSettings()
         self.search_settings.set_wrap_around(True)
 
-        self.search_context = GtkSource.SearchContext.new(
-            self.editor.source_buffer,
-            self.search_settings
-        )
-        self.search_context.set_highlight(True)
-
         # UI Container
         self._build_ui()
         self._setup_events()
+
+        if editor:
+            self.set_editor(editor)
+
+    def set_editor(self, editor):
+        """Attach search bar to an active editor instance."""
+        self.editor = editor
+        if self.editor and hasattr(self.editor, 'source_buffer'):
+            self.search_context = GtkSource.SearchContext.new(
+                self.editor.source_buffer,
+                self.search_settings
+            )
+            self.search_context.set_highlight(True)
+            self.update_match_count()
+        else:
+            self.search_context = None
 
     def _build_ui(self):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -116,14 +128,13 @@ class SearchBar(Gtk.Revealer):
         self.btn_replace_all.set_tooltip_text("Replace all occurrences")
         self.replace_box.pack_start(self.btn_replace_all, False, False, 0)
 
-        # Empty spacer to align with close button
         dummy = Gtk.Box()
         dummy.set_size_request(30, -1)
         self.replace_box.pack_start(dummy, False, False, 0)
 
         main_box.pack_start(self.replace_box, False, False, 0)
 
-        # Outer styling frame
+        # Outer frame
         frame = Gtk.Frame()
         frame.set_shadow_type(Gtk.ShadowType.OUT)
         frame.add(main_box)
@@ -131,14 +142,12 @@ class SearchBar(Gtk.Revealer):
         self.add(frame)
 
     def _setup_events(self):
-        # Entry triggers
         self.find_entry.connect("search-changed", self._on_search_changed)
         self.find_entry.connect("activate", lambda w: self.find_next())
         self.find_entry.connect("key-press-event", self._on_key_press)
         self.replace_entry.connect("activate", lambda w: self.replace_current())
         self.replace_entry.connect("key-press-event", self._on_key_press)
 
-        # Buttons
         self.btn_prev.connect("clicked", lambda w: self.find_previous())
         self.btn_next.connect("clicked", lambda w: self.find_next())
         self.btn_case.connect("toggled", self._on_option_toggled)
@@ -176,6 +185,9 @@ class SearchBar(Gtk.Revealer):
         if not query:
             self.lbl_status.set_text("")
             return
+        if not self.search_context:
+            self.lbl_status.set_text("")
+            return
 
         count = self.search_context.get_occurrences_count()
         if count == -1:
@@ -188,7 +200,7 @@ class SearchBar(Gtk.Revealer):
             self.lbl_status.set_text(f"{count} matches")
 
     def find_next(self, jump_from_start=False):
-        if not self.find_entry.get_text():
+        if not self.find_entry.get_text() or not self.editor or not self.search_context:
             return
 
         buf = self.editor.source_buffer
@@ -207,7 +219,7 @@ class SearchBar(Gtk.Revealer):
             self.lbl_status.set_text("No match")
 
     def find_previous(self):
-        if not self.find_entry.get_text():
+        if not self.find_entry.get_text() or not self.editor or not self.search_context:
             return
 
         buf = self.editor.source_buffer
@@ -227,6 +239,8 @@ class SearchBar(Gtk.Revealer):
             self.lbl_status.set_text("No match")
 
     def replace_current(self):
+        if not self.editor or not self.search_context:
+            return
         replacement = self.replace_entry.get_text()
         buf = self.editor.source_buffer
         bounds = buf.get_selection_bounds()
@@ -241,6 +255,8 @@ class SearchBar(Gtk.Revealer):
             self.find_next()
 
     def replace_all(self):
+        if not self.editor or not self.search_context:
+            return
         replacement = self.replace_entry.get_text()
         try:
             count = self.search_context.replace_all(replacement, -1)
@@ -252,26 +268,28 @@ class SearchBar(Gtk.Revealer):
         self.replace_box.set_visible(False)
         self.set_reveal_child(True)
         self.find_entry.grab_focus()
-        # Pre-fill with selected text if any
-        bounds = self.editor.source_buffer.get_selection_bounds()
-        if bounds:
-            sel_text = self.editor.source_buffer.get_text(bounds[0], bounds[1], True)
-            if sel_text and "\n" not in sel_text:
-                self.find_entry.set_text(sel_text)
-                self.find_entry.select_region(0, -1)
+        if self.editor:
+            bounds = self.editor.source_buffer.get_selection_bounds()
+            if bounds:
+                sel_text = self.editor.source_buffer.get_text(bounds[0], bounds[1], True)
+                if sel_text and "\n" not in sel_text:
+                    self.find_entry.set_text(sel_text)
+                    self.find_entry.select_region(0, -1)
 
     def show_replace(self):
         self.replace_box.set_visible(True)
         self.set_reveal_child(True)
         self.find_entry.grab_focus()
-        bounds = self.editor.source_buffer.get_selection_bounds()
-        if bounds:
-            sel_text = self.editor.source_buffer.get_text(bounds[0], bounds[1], True)
-            if sel_text and "\n" not in sel_text:
-                self.find_entry.set_text(sel_text)
-                self.find_entry.select_region(0, -1)
+        if self.editor:
+            bounds = self.editor.source_buffer.get_selection_bounds()
+            if bounds:
+                sel_text = self.editor.source_buffer.get_text(bounds[0], bounds[1], True)
+                if sel_text and "\n" not in sel_text:
+                    self.find_entry.set_text(sel_text)
+                    self.find_entry.select_region(0, -1)
 
     def close(self):
         self.set_reveal_child(False)
-        self.editor.source_view.grab_focus()
+        if self.editor and hasattr(self.editor, 'source_view'):
+            self.editor.source_view.grab_focus()
         self.emit("closed")

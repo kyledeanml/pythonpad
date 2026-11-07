@@ -34,9 +34,6 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.set_default_size(1050, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
 
-        # WM Class for Cinnamon panel grouping
-        self.set_wmclass("pythonpad", "PythonPad")
-
         # Set application icon
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
         if os.path.exists(icon_path):
@@ -380,7 +377,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         page_num = self.notebook_tabs.append_page(editor, tab_box)
         self.notebook_tabs.show_all()
         self.notebook_tabs.set_current_page(page_num)
-        self.search_bar.editor = editor
+        self.search_bar.set_editor(editor)
         self.update_title()
         return editor
 
@@ -436,7 +433,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     def _on_tab_switched(self, notebook, page, page_num):
         editor = self.get_current_editor()
         if editor:
-            self.search_bar.editor = editor
+            self.search_bar.set_editor(editor)
             self.update_title()
             stats = editor.get_document_statistics()
             self._update_stats_display(stats)
