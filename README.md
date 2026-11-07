@@ -1,4 +1,4 @@
-# RetinaPad 📝👁️
+# RetinaPad
 
 A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font scaling, subpixel anti-aliasing) and **Line Numbers**, built natively for **Linux Mint Cinnamon** using Python 3, GTK 3, and GtkSourceView 4.
 
