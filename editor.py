@@ -149,6 +149,9 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.source_buffer.connect("notify::cursor-position", self._on_cursor_moved)
 
         # Ctrl + Mouse Wheel for Retina Zoom
+        self.add_events(Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK)
+        self.source_view.add_events(Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK)
+        self.connect("scroll-event", self._on_scroll_event)
         self.source_view.connect("scroll-event", self._on_scroll_event)
 
         # Translucent Python-on-Yoga-Pad background watermark
@@ -218,9 +221,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.emit("cursor-moved", line, col)
 
     def _on_scroll_event(self, widget, event):
-        """Handle Ctrl + Mouse Wheel zoom in/out."""
-        state = event.state & Gtk.accelerator_get_default_mod_mask()
-        if state == Gdk.ModifierType.CONTROL_MASK:
+        """Handle Ctrl + Mouse Wheel zoom in/out reliably across X11 and smooth-scroll devices."""
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
             if event.direction == Gdk.ScrollDirection.UP:
                 self.zoom_in()
                 return True
@@ -229,10 +231,10 @@ class RetinaEditor(Gtk.ScrolledWindow):
                 return True
             elif event.direction == Gdk.ScrollDirection.SMOOTH:
                 _, dy = event.get_scroll_deltas()
-                if dy < 0:
+                if dy < -0.01:
                     self.zoom_in()
                     return True
-                elif dy > 0:
+                elif dy > 0.01:
                     self.zoom_out()
                     return True
         return False

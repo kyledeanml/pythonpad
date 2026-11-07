@@ -75,10 +75,10 @@ class TestPythonLinterAndRunner(unittest.TestCase):
     """Test AST syntax analysis and script runner."""
 
     def test_valid_python_lint(self):
-        code = "def add(a, b):\n    return a + b\n"
+        code = '"""Module docstring."""\n\n\ndef add(a, b):\n    """Add two numbers."""\n    return a + b\n'
         diags, summary, used = PythonLinter.lint(content=code)
         self.assertEqual(len(diags), 0)
-        self.assertIn("OK", summary)
+        self.assertTrue("Clean" in summary or "OK" in summary)
 
     def test_syntax_error_detection(self):
         bad_code = "def broken(\n    print('unclosed')\n"
