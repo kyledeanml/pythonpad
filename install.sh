@@ -19,9 +19,26 @@ mkdir -p "$ICONS_DIR"
 mkdir -p "$BIN_DIR"
 mkdir -p "$STYLES_DIR"
 
-# 1. Install high-DPI vector icon & styles
-cp "$DIR/pythonpad.svg" "$ICONS_DIR/pythonpad.svg"
-echo "[+] Installed PythonPad SVG icon: $ICONS_DIR/pythonpad.svg"
+# 1. Install high-DPI vector icon & multi-size PNG icons for Cinnamon panel / menus
+cp -f "$DIR/pythonpad.svg" "$ICONS_DIR/pythonpad.svg"
+mkdir -p "$HOME/.icons" "$HOME/.local/share/pixmaps"
+cp -f "$DIR/pythonpad.svg" "$HOME/.icons/pythonpad.svg"
+cp -f "$DIR/pythonpad.svg" "$HOME/.local/share/pixmaps/pythonpad.svg"
+
+python3 -B -c "
+import os, gi
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import GdkPixbuf
+src = '$DIR/pythonpad.svg'
+base = os.path.expanduser('~/.local/share/icons/hicolor')
+for sz in (16, 24, 32, 48, 64, 128, 256, 512):
+    out_dir = os.path.join(base, f'{sz}x{sz}', 'apps')
+    os.makedirs(out_dir, exist_ok=True)
+    pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(src, sz, sz, True)
+    pb.savev(os.path.join(out_dir, 'pythonpad.png'), 'png', [], [])
+" 2>/dev/null || true
+
+echo "[+] Installed PythonPad SVG & panel icon set: $ICONS_DIR/pythonpad.svg"
 if [ -d "$DIR/styles" ]; then
     cp -r "$DIR/styles/"* "$STYLES_DIR/"
     echo "[+] Installed GtkSource style schemes: $STYLES_DIR"

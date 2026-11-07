@@ -38,11 +38,19 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.set_position(Gtk.WindowPosition.CENTER)
         self._stats_timeout_id = None
 
-        # Set application icon
+        # Set application & window icon for Cinnamon panel, alt-tab, and taskbar
+        self.set_wmclass("pythonpad", "PythonPad")
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
         if os.path.exists(icon_path):
             try:
+                Gtk.Window.set_default_icon_from_file(icon_path)
                 self.set_icon_from_file(icon_path)
+                pixbufs = [
+                    GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, sz, sz, True)
+                    for sz in (16, 24, 32, 48, 64, 128, 256)
+                ]
+                Gtk.Window.set_default_icon_list(pixbufs)
+                self.set_icon_list(pixbufs)
             except Exception:
                 pass
 
