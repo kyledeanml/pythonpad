@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-RetinaPad - Editor Component
+PythonPad - Editor Component
 Provides a high-DPI (Retina) optimized text view using GtkSourceView 4.
 """
 
 import os
 import re
+import tempfile
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -41,6 +42,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
         1.10, 1.25, 1.40, 1.55, 1.75, 2.00, 2.25, 2.50, 3.00
     ]
     DEFAULT_ZOOM_INDEX = 5  # 1.00 (100%)
+    _shared_css_provider = None
 
     def __init__(self, file_path=None):
         super().__init__()
@@ -50,7 +52,12 @@ class RetinaEditor(Gtk.ScrolledWindow):
         # File state
         self.file_path = None
         self.file_encoding = "UTF-8"
+        self.line_ending = "LF"
         self._is_modified = False
+
+        # Cached statistics for O(1) lookups when buffer hasn't changed
+        self._stats_dirty = True
+        self._cached_word_count = 0
 
         # Font & Retina scaling
         self.base_font_family = "Monospace"
@@ -72,7 +79,13 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.set_theme("pythonpad-neon")  # Dark mode with white and neon blue hue
 
         if file_path:
-            self.load_file(file_path)
+            expanded = os.path.abspath(os.path.expanduser(file_path))
+            if os.path.isfile(expanded):
+                self.load_file(expanded)
+            elif not os.path.exists(expanded):
+                # New file path passed via CLI: bind path and syntax without crashing
+                self.file_path = expanded
+                self.set_syntax_from_filename(self.file_path)
 
     def _setup_view_properties(self):
         """Configure editor view properties: line numbers, wrapping, spacing."""
@@ -94,30 +107,37 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
     def _setup_retina_styles(self):
         """Apply CSS rules for crisp borders, clear gutters, and retina subpixel sharpness."""
-        css_provider = Gtk.CssProvider()
-        css = b"""
-        textview {
-            font-feature-settings: "liga 1, calt 1";
-            background-color: #0a0e1a;
-            color: #ffffff;
-        }
-        textview text {
-            background-color: #0a0e1a;
-            color: #ffffff;
-        }
-        textview border {
-            background-color: #070a14;
-            border-right: 1px solid rgba(0, 240, 255, 0.25);
-            padding-right: 8px;
-            padding-left: 6px;
-        }
-        """
-        try:
-            css_provider.load_from_data(css)
-            context = self.source_view.get_style_context()
-            context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        except Exception as e:
-            print(f"Notice: Failed to load retina CSS: {e}")
+        if RetinaEditor._shared_css_provider is None:
+            provider = Gtk.CssProvider()
+            css = b"""
+            textview {
+                font-feature-settings: "liga 1, calt 1";
+                background-color: #0a0e1a;
+                color: #ffffff;
+            }
+            textview text {
+                background-color: #0a0e1a;
+                color: #ffffff;
+            }
+            textview border {
+                background-color: #070a14;
+                border-right: 1px solid rgba(0, 240, 255, 0.25);
+                padding-right: 8px;
+                padding-left: 6px;
+            }
+            """
+            try:
+                provider.load_from_data(css)
+                RetinaEditor._shared_css_provider = provider
+            except Exception as e:
+                print(f"Notice: Failed to load retina CSS: {e}")
+                return
+
+        context = self.source_view.get_style_context()
+        context.add_provider(
+            RetinaEditor._shared_css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
     def _setup_signals(self):
         """Connect buffer and view signals."""
@@ -128,10 +148,11 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.source_view.connect("scroll-event", self._on_scroll_event)
 
     def _on_buffer_changed(self, buffer):
-        """Track modification state."""
+        """Track modification state and mark document stats cache dirty."""
+        self._stats_dirty = True
         if not self._is_modified:
             self._is_modified = True
-            self.emit("content-modified", True)
+        self.emit("content-modified", True)
 
     def _on_cursor_moved(self, buffer, pspec):
         """Notify listeners when cursor moves (Line / Col update)."""
@@ -200,7 +221,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
     def set_font_family_and_size(self, family, size):
         """Update base font family and size."""
         self.base_font_family = family
-        self.base_font_size = size
+        self.base_font_size = max(6, int(size))
         self.apply_retina_font()
 
     # --------------------------------------------------------------------------
@@ -211,7 +232,6 @@ class RetinaEditor(Gtk.ScrolledWindow):
         manager = GtkSource.StyleSchemeManager.get_default()
         scheme = manager.get_scheme(scheme_id)
         if not scheme:
-            # Fallback
             for fallback in ['pythonpad-neon', 'oblivion', 'cobalt', 'xed', 'classic']:
                 scheme = manager.get_scheme(fallback)
                 if scheme:
@@ -256,13 +276,16 @@ class RetinaEditor(Gtk.ScrolledWindow):
     def goto_line_col(self, line_number: int, column: int = 1):
         """Jump cursor to a specific 1-based line and column, and scroll to view."""
         buf = self.source_buffer
-        total_lines = buf.get_line_count()
-        target_line = max(0, min(line_number - 1, total_lines - 1))
+        total_lines = max(1, buf.get_line_count())
+        target_line = max(0, min(int(line_number) - 1, total_lines - 1))
 
         iter_at_line = buf.get_iter_at_line(target_line)
-        line_length = iter_at_line.get_chars_in_line()
-        offset = max(0, min(column - 1, max(0, line_length - 1)))
-        iter_at_line.forward_chars(offset)
+        eol = iter_at_line.copy()
+        if not eol.ends_line():
+            eol.forward_to_line_end()
+        line_length = eol.get_line_offset()
+        offset = max(0, min(int(column) - 1, line_length))
+        iter_at_line.set_line_offset(offset)
 
         buf.place_cursor(iter_at_line)
         self.source_view.scroll_to_iter(iter_at_line, 0.25, False, 0.0, 0.0)
@@ -287,38 +310,40 @@ class RetinaEditor(Gtk.ScrolledWindow):
                 cur = buf.get_iter_at_mark(buf.get_insert())
                 start_l = end_l = cur.get_line()
 
-            # Determine whether all selected lines are commented
+            # Determine whether all non-empty selected lines are commented
+            non_empty_count = 0
             all_commented = True
-            lines_iters = []
-            for l in range(start_l, end_l + 1):
+            lines_iters = list(range(start_l, end_l + 1))
+
+            for l in lines_iters:
                 it = buf.get_iter_at_line(l)
                 eol = it.copy()
-                eol.forward_to_line_end()
+                if not eol.ends_line():
+                    eol.forward_to_line_end()
                 line_str = buf.get_text(it, eol, True).strip()
-                if line_str and not line_str.startswith("#"):
-                    all_commented = False
-                lines_iters.append(l)
+                if line_str:
+                    non_empty_count += 1
+                    if not line_str.startswith("#"):
+                        all_commented = False
+
+            if non_empty_count == 0:
+                all_commented = False
 
             # Apply comment or uncomment
             for l in lines_iters:
                 it = buf.get_iter_at_line(l)
                 eol = it.copy()
-                eol.forward_to_line_end()
+                if not eol.ends_line():
+                    eol.forward_to_line_end()
                 line_str = buf.get_text(it, eol, True)
 
                 if all_commented:
-                    # Remove comment
-                    if "# " in line_str:
-                        new_line = line_str.replace("# ", "", 1)
-                    elif "#" in line_str:
-                        new_line = line_str.replace("#", "", 1)
-                    else:
-                        new_line = line_str
-                    buf.delete(it, eol)
-                    it = buf.get_iter_at_line(l)
-                    buf.insert(it, new_line)
+                    new_line = re.sub(r'^(\s*)# ?', r'\1', line_str, count=1)
+                    if new_line != line_str:
+                        buf.delete(it, eol)
+                        it = buf.get_iter_at_line(l)
+                        buf.insert(it, new_line)
                 else:
-                    # Add comment
                     buf.insert(it, "# ")
         finally:
             buf.end_user_action()
@@ -338,7 +363,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
                 l = cur.get_line()
                 it = buf.get_iter_at_line(l)
                 eol = it.copy()
-                eol.forward_to_line_end()
+                if not eol.ends_line():
+                    eol.forward_to_line_end()
                 line_text = buf.get_text(it, eol, True)
                 buf.insert(eol, "\n" + line_text)
         finally:
@@ -354,7 +380,10 @@ class RetinaEditor(Gtk.ScrolledWindow):
             it = buf.get_iter_at_line(l)
             eol = it.copy()
             if not eol.forward_line():
-                eol.forward_to_line_end()
+                if not eol.ends_line():
+                    eol.forward_to_line_end()
+                if l > 0:
+                    it.backward_char()
             buf.delete(it, eol)
         finally:
             buf.end_user_action()
@@ -364,33 +393,36 @@ class RetinaEditor(Gtk.ScrolledWindow):
         buf = self.source_buffer
         cur = buf.get_iter_at_mark(buf.get_insert())
         l = cur.get_line()
+        col = cur.get_line_offset() + 1
         if l == 0:
             return
         buf.begin_user_action()
         try:
             it = buf.get_iter_at_line(l)
             eol = it.copy()
-            eol.forward_to_line_end()
+            if not eol.ends_line():
+                eol.forward_to_line_end()
             cur_line = buf.get_text(it, eol, True)
 
             prev_it = buf.get_iter_at_line(l - 1)
             prev_eol = prev_it.copy()
-            prev_eol.forward_to_line_end()
+            if not prev_eol.ends_line():
+                prev_eol.forward_to_line_end()
             prev_line = buf.get_text(prev_it, prev_eol, True)
 
-            # Swap lines
             buf.delete(it, eol)
             it = buf.get_iter_at_line(l)
             buf.insert(it, prev_line)
 
             prev_it = buf.get_iter_at_line(l - 1)
             prev_eol = prev_it.copy()
-            prev_eol.forward_to_line_end()
+            if not prev_eol.ends_line():
+                prev_eol.forward_to_line_end()
             buf.delete(prev_it, prev_eol)
             prev_it = buf.get_iter_at_line(l - 1)
             buf.insert(prev_it, cur_line)
 
-            self.goto_line(l)
+            self.goto_line_col(l, col)
         finally:
             buf.end_user_action()
 
@@ -399,18 +431,21 @@ class RetinaEditor(Gtk.ScrolledWindow):
         buf = self.source_buffer
         cur = buf.get_iter_at_mark(buf.get_insert())
         l = cur.get_line()
+        col = cur.get_line_offset() + 1
         if l >= buf.get_line_count() - 1:
             return
         buf.begin_user_action()
         try:
             it = buf.get_iter_at_line(l)
             eol = it.copy()
-            eol.forward_to_line_end()
+            if not eol.ends_line():
+                eol.forward_to_line_end()
             cur_line = buf.get_text(it, eol, True)
 
             next_it = buf.get_iter_at_line(l + 1)
             next_eol = next_it.copy()
-            next_eol.forward_to_line_end()
+            if not next_eol.ends_line():
+                next_eol.forward_to_line_end()
             next_line = buf.get_text(next_it, next_eol, True)
 
             buf.delete(next_it, next_eol)
@@ -419,12 +454,13 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
             it = buf.get_iter_at_line(l)
             eol = it.copy()
-            eol.forward_to_line_end()
+            if not eol.ends_line():
+                eol.forward_to_line_end()
             buf.delete(it, eol)
             it = buf.get_iter_at_line(l)
             buf.insert(it, next_line)
 
-            self.goto_line(l + 2)
+            self.goto_line_col(l + 2, col)
         finally:
             buf.end_user_action()
 
@@ -438,9 +474,9 @@ class RetinaEditor(Gtk.ScrolledWindow):
         buf.begin_user_action()
         try:
             it = buf.get_iter_at_line(l)
-            it.forward_to_line_end()
+            if not it.ends_line():
+                it.forward_to_line_end()
             next_it = buf.get_iter_at_line(l + 1)
-            # Find first non-whitespace on next line
             while not next_it.ends_line() and next_it.get_char() in (' ', '\t'):
                 next_it.forward_char()
             buf.delete(it, next_it)
@@ -457,10 +493,15 @@ class RetinaEditor(Gtk.ScrolledWindow):
         buf.begin_user_action()
         try:
             start, end = bounds
+            start_offset = start.get_offset()
             text = buf.get_text(start, end, True)
             new_text = text.upper() if upper else text.lower()
             buf.delete(start, end)
-            buf.insert_at_cursor(new_text)
+            ins_iter = buf.get_iter_at_offset(start_offset)
+            buf.insert(ins_iter, new_text)
+            sel_start = buf.get_iter_at_offset(start_offset)
+            sel_end = buf.get_iter_at_offset(start_offset + len(new_text))
+            buf.select_range(sel_start, sel_end)
         finally:
             buf.end_user_action()
 
@@ -486,7 +527,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
                     buf.insert(it, "    ")
                 else:
                     eol = it.copy()
-                    eol.forward_to_line_end()
+                    if not eol.ends_line():
+                        eol.forward_to_line_end()
                     line_str = buf.get_text(it, eol, True)
                     if line_str.startswith("    "):
                         del_end = it.copy()
@@ -506,7 +548,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
             buf.end_user_action()
 
     # --------------------------------------------------------------------------
-    # Document Stats
+    # Document Stats (Optimized with O(1) GTK B-Tree counts & dirty-flag cache)
     # --------------------------------------------------------------------------
     def get_cursor_position(self):
         """Return (line, column) tuple (1-based line, 1-based column)."""
@@ -520,24 +562,27 @@ class RetinaEditor(Gtk.ScrolledWindow):
     def get_document_statistics(self):
         """Return dict with total lines, words, characters, line, col."""
         buf = self.source_buffer
-        start, end = buf.get_bounds()
-        text = buf.get_text(start, end, True)
-
         total_lines = buf.get_line_count()
-        char_count = len(text)
-        word_count = len(re.findall(r'\S+', text))
+        char_count = buf.get_char_count()
         line, col = self.get_cursor_position()
+
+        if self._stats_dirty:
+            if char_count <= 2_000_000:
+                start, end = buf.get_bounds()
+                text = buf.get_text(start, end, True)
+                self._cached_word_count = len(text.split())
+            self._stats_dirty = False
 
         return {
             'line': line,
             'col': col,
             'total_lines': total_lines,
-            'word_count': word_count,
+            'word_count': self._cached_word_count,
             'char_count': char_count,
         }
 
     # --------------------------------------------------------------------------
-    # File Operations
+    # File Operations (Null-Byte Safe & Atomic Write)
     # --------------------------------------------------------------------------
     def is_modified(self) -> bool:
         return self._is_modified
@@ -547,18 +592,31 @@ class RetinaEditor(Gtk.ScrolledWindow):
         start, end = buf.get_bounds()
         return buf.get_text(start, end, True)
 
-    def set_text(self, text: str):
-        self.source_buffer.set_text(text)
+    def set_text(self, text: str, undoable: bool = False):
+        clean_text = (text or "").replace("\x00", "\ufffd")
+        buf = self.source_buffer
+        if not undoable:
+            buf.begin_not_undoable_action()
+        try:
+            buf.set_text(clean_text)
+        finally:
+            if not undoable:
+                buf.end_not_undoable_action()
         self._is_modified = False
+        self._stats_dirty = True
         self.emit("content-modified", False)
 
     def load_file(self, path: str) -> bool:
-        """Load text from file path with automatic encoding fallback."""
+        """Load text from file path with automatic encoding fallback and null-byte protection."""
         try:
             with open(path, 'rb') as f:
                 raw_bytes = f.read()
 
-            for enc in ['utf-8', 'latin-1', 'cp1252']:
+            had_nulls = b'\x00' in raw_bytes
+            if had_nulls:
+                raw_bytes = raw_bytes.replace(b'\x00', b'\xef\xbf\xbd')
+
+            for enc in ('utf-8', 'latin-1', 'cp1252'):
                 try:
                     text = raw_bytes.decode(enc)
                     self.file_encoding = enc.upper()
@@ -569,8 +627,15 @@ class RetinaEditor(Gtk.ScrolledWindow):
                 text = raw_bytes.decode('utf-8', errors='replace')
                 self.file_encoding = 'UTF-8 (lossy)'
 
+            if had_nulls and 'lossy' not in self.file_encoding.lower():
+                self.file_encoding = f"{self.file_encoding} (binary)"
+
+            self.line_ending = "CRLF" if "\r\n" in text else "LF"
+            if self.line_ending == "CRLF":
+                text = text.replace("\r\n", "\n")
+
             self.file_path = os.path.abspath(path)
-            self.set_text(text)
+            self.set_text(text, undoable=False)
             self.set_syntax_from_filename(self.file_path)
             self._is_modified = False
             self.emit("content-modified", False)
@@ -580,18 +645,64 @@ class RetinaEditor(Gtk.ScrolledWindow):
             raise e
 
     def save_file(self, path: str = None) -> bool:
-        """Save buffer content to disk."""
+        """Save buffer content to disk safely without risking zero-byte truncation on encoding error."""
         target_path = path or self.file_path
         if not target_path:
             raise ValueError("No file path specified to save.")
 
+        abs_target = os.path.abspath(target_path)
         text = self.get_text()
-        encoding = 'utf-8' if 'lossy' in self.file_encoding.lower() else self.file_encoding.lower()
+        if self.line_ending == "CRLF":
+            text_to_write = text.replace("\n", "\r\n")
+        else:
+            text_to_write = text
 
-        with open(target_path, 'w', encoding=encoding) as f:
-            f.write(text)
+        enc_raw = self.file_encoding.split()[0].lower()
+        encoding = 'utf-8' if enc_raw not in ('utf-8', 'latin-1', 'cp1252') else enc_raw
 
-        self.file_path = os.path.abspath(target_path)
+        # Encode in memory BEFORE touching disk so UnicodeEncodeError never truncates the file
+        try:
+            encoded_bytes = text_to_write.encode(encoding)
+        except UnicodeEncodeError:
+            encoding = 'utf-8'
+            self.file_encoding = 'UTF-8'
+            encoded_bytes = text_to_write.encode('utf-8')
+
+        # Preserve permissions and write safely
+        target_dir = os.path.dirname(abs_target) or "."
+        existing_mode = None
+        is_symlink = os.path.islink(abs_target)
+        if os.path.exists(abs_target):
+            try:
+                existing_mode = os.stat(abs_target).st_mode
+            except OSError:
+                pass
+
+        if not is_symlink and os.access(target_dir, os.W_OK):
+            fd, tmp_path = tempfile.mkstemp(prefix=".pythonpad_save_", dir=target_dir)
+            try:
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(encoded_bytes)
+                    f.flush()
+                    os.fsync(f.fileno())
+                if existing_mode is not None:
+                    try:
+                        os.chmod(tmp_path, existing_mode)
+                    except OSError:
+                        pass
+                os.replace(tmp_path, abs_target)
+            except Exception:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+                raise
+        else:
+            with open(abs_target, 'wb') as f:
+                f.write(encoded_bytes)
+
+        self.file_path = abs_target
         self._is_modified = False
         self.set_syntax_from_filename(self.file_path)
         self.emit("content-modified", False)

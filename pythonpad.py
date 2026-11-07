@@ -8,6 +8,7 @@ Designed for Linux Mint Cinnamon.
 
 import sys
 import os
+import shlex
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -27,17 +28,21 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     """Main application window for PythonPad."""
 
     APP_NAME = "PythonPad"
-    APP_VERSION = "2.0"
+    APP_VERSION = "2.1"
 
     def __init__(self, app, initial_files=None):
         super().__init__(application=app, title=self.APP_NAME)
         self.set_default_size(1050, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
+        self._stats_timeout_id = None
 
         # Set application icon
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
         if os.path.exists(icon_path):
-            self.set_icon_from_file(icon_path)
+            try:
+                self.set_icon_from_file(icon_path)
+            except Exception:
+                pass
 
         # Dark mode preference & neon blue theme
         settings = Gtk.Settings.get_default()
@@ -58,7 +63,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         if initial_files:
             for f in initial_files:
                 self.new_tab(f)
-        else:
+        if self.notebook_tabs.get_n_pages() == 0:
             self.new_tab()
 
         self.show_all()
@@ -409,7 +414,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         run_menu.append(it_check)
 
         it_shell = Gtk.MenuItem(label="Python Interactive Shell")
-        it_shell.connect("activate", lambda w: self.toggle_bottom_panel(tab_index=0))
+        it_shell.connect("activate", lambda w: self.toggle_bottom_panel(force_show=True, tab_index=0))
         run_menu.append(it_shell)
 
         it_restart = Gtk.MenuItem(label="Restart Shell (Ctrl+F6)")
@@ -582,17 +587,53 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     # Tab Management
     # --------------------------------------------------------------------------
     def new_tab(self, file_path=None):
-        """Create and append a new document tab with a RetinaEditor."""
-        editor = RetinaEditor(file_path=file_path)
+        """Create and append a new document tab with a RetinaEditor, or focus if already open."""
+        if file_path:
+            abs_path = os.path.abspath(os.path.expanduser(file_path))
+            for i in range(self.notebook_tabs.get_n_pages()):
+                existing = self.notebook_tabs.get_nth_page(i)
+                if existing.file_path and os.path.abspath(existing.file_path) == abs_path:
+                    self.notebook_tabs.set_current_page(i)
+                    return existing
+
+            # Reuse single untouched Untitled tab if present
+            if self.notebook_tabs.get_n_pages() == 1:
+                first_ed = self.notebook_tabs.get_nth_page(0)
+                if not first_ed.file_path and not first_ed.is_modified() and first_ed.source_buffer.get_char_count() == 0:
+                    try:
+                        if os.path.isfile(abs_path):
+                            first_ed.load_file(abs_path)
+                        else:
+                            first_ed.file_path = abs_path
+                            first_ed.set_syntax_from_filename(abs_path)
+                        self._update_tab_label(first_ed)
+                        self.update_title()
+                        self._schedule_stats_update(first_ed, immediate=True)
+                        return first_ed
+                    except Exception as e:
+                        self._show_error(f"Could not open file:\n{e}")
+                        return first_ed
+
+        try:
+            editor = RetinaEditor(file_path=file_path)
+        except Exception as e:
+            self._show_error(f"Could not open file:\n{e}")
+            return None
+
         if hasattr(self, 'current_theme') and self.current_theme:
             editor.set_theme(self.current_theme)
+        if hasattr(self, 'btn_line_numbers'):
+            editor.set_show_line_numbers(self.btn_line_numbers.get_active())
+        if hasattr(self, 'menu_wrap'):
+            editor.set_word_wrap(self.menu_wrap.get_active())
+
         editor.connect("cursor-moved", self._on_cursor_moved)
         editor.connect("content-modified", self._on_content_modified)
         editor.connect("zoom-changed", self._on_zoom_changed)
         editor.connect("file-saved", self._on_file_saved)
 
         # Tab label header with title and close button
-        title = os.path.basename(file_path) if file_path else "Untitled"
+        title = os.path.basename(editor.file_path) if editor.file_path else "Untitled"
         tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
 
         lbl_title = Gtk.Label(label=title)
@@ -606,10 +647,11 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         tab_box.show_all()
 
         page_num = self.notebook_tabs.append_page(editor, tab_box)
-        self.notebook_tabs.show_all()
+        editor.show_all()
         self.notebook_tabs.set_current_page(page_num)
         self.search_bar.set_editor(editor)
         self.update_title()
+        self._schedule_stats_update(editor, immediate=True)
         return editor
 
     def get_current_editor(self):
@@ -652,7 +694,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             if resp == Gtk.ResponseType.YES:
                 if not self.on_save(editor):
                     return
-            elif resp == Gtk.ResponseType.CANCEL:
+            elif resp != Gtk.ResponseType.NO:
+                # Cancel or Escape/Delete-Event safely aborts closing
                 return
 
         self.notebook_tabs.remove_page(page_num)
@@ -662,12 +705,14 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             self.update_title()
 
     def _on_tab_switched(self, notebook, page, page_num):
-        editor = self.get_current_editor()
+        editor = page if isinstance(page, RetinaEditor) else self.get_current_editor()
         if editor:
             self.search_bar.set_editor(editor)
             self.update_title()
-            stats = editor.get_document_statistics()
-            self._update_stats_display(stats)
+            line, col = editor.get_cursor_position()
+            self.lbl_pos.set_text(f"Ln {line}, Col {col}")
+            self.lbl_encoding.set_text(f"{editor.file_encoding} | {editor.line_ending}")
+            self._schedule_stats_update(editor, immediate=True)
             percent = editor.get_zoom_percent()
             self.btn_zoom_reset.set_label(f"{percent}%")
             self.lbl_zoom.set_text(f"Retina: {percent}%")
@@ -777,12 +822,13 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         dialog.set_default_response(Gtk.ResponseType.OK)
         dialog.set_border_width(12)
 
+        safe_name = GLib.markup_escape_text(os.path.basename(ed.file_path or "Script"))
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        lbl = Gtk.Label(label=f"Arguments to pass to <b>{os.path.basename(ed.file_path or 'Script')}</b>:")
+        lbl = Gtk.Label(label=f"Arguments to pass to <b>{safe_name}</b>:")
         lbl.set_use_markup(True)
         lbl.set_xalign(0)
         entry = Gtk.Entry()
-        entry.set_placeholder_text("e.g. --verbose input.csv --limit 10")
+        entry.set_placeholder_text("e.g. --verbose \"input file.csv\" --limit 10")
         entry.set_activates_default(True)
 
         box.pack_start(lbl, False, False, 0)
@@ -792,7 +838,13 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         if dialog.run() == Gtk.ResponseType.OK:
             raw_args = entry.get_text().strip()
-            args = raw_args.split() if raw_args else []
+            if raw_args:
+                try:
+                    args = shlex.split(raw_args)
+                except ValueError:
+                    args = raw_args.split()
+            else:
+                args = []
             dialog.destroy()
             self.run_active_script(script_args=args)
         else:
@@ -804,7 +856,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         if not ed:
             return
         content = ed.get_text()
-        diags, summary, _ = PythonLinter.lint(file_path=ed.file_path, content=content)
+        diags, _summary, _ = PythonLinter.lint(file_path=ed.file_path, content=content)
         if not diags:
             dialog = Gtk.MessageDialog(
                 transient_for=self,
@@ -818,24 +870,31 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             dialog.destroy()
         else:
             self.toggle_bottom_panel(force_show=True, tab_index=2)
-            self.panel.run_lint()
 
     def toggle_bottom_panel(self, force_show=None, tab_index=0):
+        tab_names = {0: "shell", 1: "console", 2: "lint"}
+        target_name = tab_names.get(tab_index, "shell")
+        current_name = self.panel.notebook.get_visible_child_name()
+
         if force_show is None:
-            show = not self.panel.get_visible()
+            if not self.panel.get_visible():
+                show = True
+            elif current_name != target_name:
+                # Panel is open on another tab: switch to the requested tab instead of hiding
+                show = True
+            else:
+                show = False
         else:
             show = force_show
 
+        was_visible = self.panel.get_visible()
         self.panel.set_visible(show)
         if show:
-            win_h = self.get_size()[1]
-            self.paned.set_position(max(200, win_h - 250))
-            if tab_index == 0:
-                self.panel.tab_btn_shell.set_active(True)
-            elif tab_index == 1:
-                self.panel.tab_btn_run.set_active(True)
-            elif tab_index == 2:
-                self.panel.tab_btn_lint.set_active(True)
+            if not was_visible:
+                win_h = self.get_allocated_height() or self.get_size()[1]
+                self.paned.set_position(max(200, win_h - 260))
+            self.panel.select_tab(tab_index)
+            if tab_index == 2:
                 self.panel.run_lint()
 
     def on_select_interpreter(self):
@@ -860,7 +919,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         sel_idx = 0
         for i, (path, ver) in enumerate(interps):
             combo.append_text(f"{ver} — {path}")
-            if path == active:
+            if os.path.realpath(os.path.expanduser(path)) == os.path.realpath(active):
                 sel_idx = i
         combo.set_active(sel_idx)
         box.pack_start(combo, False, False, 0)
@@ -874,33 +933,60 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         if dialog.run() == Gtk.ResponseType.OK:
             custom = entry_custom.get_text().strip()
-            if custom and os.path.exists(custom):
-                InterpreterManager.set_active_interpreter(custom)
+            if custom:
+                if not InterpreterManager.set_active_interpreter(custom):
+                    dialog.destroy()
+                    self._show_error(f"Invalid or non-executable Python interpreter path:\n{custom}")
+                    return
             else:
                 idx = combo.get_active()
                 if 0 <= idx < len(interps):
                     InterpreterManager.set_active_interpreter(interps[idx][0])
 
             ver = InterpreterManager.get_interpreter_version()
+            active_path = InterpreterManager.get_active_interpreter()
             self.lbl_interp.set_text(f"Python: {ver} (Base)")
-            self.panel.lbl_status.set_text(f"Base Interpreter: {InterpreterManager.get_active_interpreter()}")
+            self.panel.lbl_status.set_text(f"Base Interpreter: {active_path}")
+            self.panel.shell_session.banner = (
+                f"PythonPad Interactive Shell\n"
+                f"Interpreter: {active_path} ({ver})\n"
+                f"Type Python expressions below. Use Up/Down arrows for command history.\n"
+            )
         dialog.destroy()
 
     # --------------------------------------------------------------------------
-    # Editor Signals & Title Updates
+    # Editor Signals & Title Updates (Debounced for Zero-Lag Typing)
     # --------------------------------------------------------------------------
     def _on_cursor_moved(self, editor, line, col):
         if editor == self.get_current_editor():
             self.lbl_pos.set_text(f"Ln {line}, Col {col}")
-            stats = editor.get_document_statistics()
-            self._update_stats_display(stats)
 
     def _on_content_modified(self, editor, is_modified):
         self._update_tab_label(editor)
         if editor == self.get_current_editor():
             self.update_title()
-            stats = editor.get_document_statistics()
-            self._update_stats_display(stats)
+            self._schedule_stats_update(editor, immediate=False)
+
+    def _schedule_stats_update(self, editor, immediate=False):
+        if self._stats_timeout_id is not None:
+            GLib.source_remove(self._stats_timeout_id)
+            self._stats_timeout_id = None
+
+        if immediate:
+            if editor == self.get_current_editor():
+                stats = editor.get_document_statistics()
+                self._update_stats_display(stats)
+            return
+
+        def _deferred():
+            self._stats_timeout_id = None
+            cur = self.get_current_editor()
+            if cur:
+                stats = cur.get_document_statistics()
+                self._update_stats_display(stats)
+            return False
+
+        self._stats_timeout_id = GLib.timeout_add(120, _deferred)
 
     def _on_zoom_changed(self, editor, percent):
         if editor == self.get_current_editor():
@@ -911,7 +997,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self._update_tab_label(editor)
         if editor == self.get_current_editor():
             self.update_title()
-            self.lbl_encoding.set_text(f"{editor.file_encoding} | LF")
+            self.lbl_encoding.set_text(f"{editor.file_encoding} | {editor.line_ending}")
             if self.panel.get_visible() and self.panel.tab_btn_lint.get_active():
                 self.panel.run_lint()
 
@@ -924,7 +1010,9 @@ class PythonPadWindow(Gtk.ApplicationWindow):
                 if children and isinstance(children[0], Gtk.Label):
                     base_name = os.path.basename(editor.file_path) if editor.file_path else "Untitled"
                     mod = "● " if editor.is_modified() else ""
-                    children[0].set_text(f"{mod}{base_name}")
+                    new_lbl = f"{mod}{base_name}"
+                    if children[0].get_text() != new_lbl:
+                        children[0].set_text(new_lbl)
 
     def update_title(self):
         ed = self.get_current_editor()
@@ -949,7 +1037,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self._add_file_filters(dialog)
         if dialog.run() == Gtk.ResponseType.ACCEPT:
             path = dialog.get_filename()
-            self.new_tab(path)
+            if path:
+                self.new_tab(path)
         dialog.destroy()
 
     def on_save(self, target_editor=None):
@@ -981,11 +1070,12 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         success = False
         if dialog.run() == Gtk.ResponseType.ACCEPT:
             path = dialog.get_filename()
-            try:
-                ed.save_file(path)
-                success = True
-            except Exception as e:
-                self._show_error(f"Could not save file:\n{e}")
+            if path:
+                try:
+                    ed.save_file(path)
+                    success = True
+                except Exception as e:
+                    self._show_error(f"Could not save file:\n{e}")
         dialog.destroy()
         return success
 
@@ -1015,13 +1105,13 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     def on_show_find(self):
         ed = self.get_current_editor()
         if ed:
-            self.search_bar.editor = ed
+            self.search_bar.set_editor(ed)
             self.search_bar.show_find()
 
     def on_show_replace(self):
         ed = self.get_current_editor()
         if ed:
-            self.search_bar.editor = ed
+            self.search_bar.set_editor(ed)
             self.search_bar.show_replace()
 
     def zoom_active(self, out=False, reset=False):
@@ -1057,12 +1147,12 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             return
         dialog = Gtk.Dialog(title="Go to Line", transient_for=self, flags=Gtk.DialogFlags.MODAL, buttons=("Cancel", Gtk.ResponseType.CANCEL, "Go", Gtk.ResponseType.OK))
         dialog.set_default_response(Gtk.ResponseType.OK)
+        dialog.set_border_width(10)
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         lbl = Gtk.Label(label="Line:")
-        entry = Gtk.SpinButton()
-        stats = ed.get_document_statistics()
-        entry.set_range(1, max(1, stats['total_lines']))
-        entry.set_value(stats['line'])
+        entry = Gtk.SpinButton.new_with_range(1, max(1, ed.source_buffer.get_line_count()), 1)
+        line, _ = ed.get_cursor_position()
+        entry.set_value(line)
         entry.set_activates_default(True)
         box.pack_start(lbl, False, False, 0)
         box.pack_start(entry, True, True, 0)
@@ -1091,18 +1181,19 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         scale = window.get_scale_factor() if window else 1
         ed = self.get_current_editor()
         zoom = ed.get_zoom_percent() if ed else 100
-        interp = InterpreterManager.get_active_interpreter()
+        interp = GLib.markup_escape_text(InterpreterManager.get_active_interpreter())
+        ver = GLib.markup_escape_text(InterpreterManager.get_interpreter_version())
 
         text = (
             f"<b>PythonPad Environment Diagnostics:</b>\n\n"
-            f"• <b>Base Python:</b> {interp} ({InterpreterManager.get_interpreter_version()})\n"
+            f"• <b>Base Python:</b> {interp} ({ver})\n"
             f"• <b>Hardware Display Scale:</b> {scale}x ({'HiDPI / Retina Active' if scale > 1 else 'Standard DPI'})\n"
             f"• <b>Current Editor Zoom:</b> {zoom}%\n"
             f"• <b>Subpixel Antialiasing:</b> Cairo RGBA Subpixel Enabled\n\n"
             f"<i>Features:</i>\n"
             f"• Interactive Python REPL Console + F5 Script Runner\n"
             f"• Advanced Code Editing (Multi-tab, comments, line duplication, line shift)\n"
-            f"• Pylint & AST Diagnostics Viewer\n"
+            f"• Pylint &amp; AST Diagnostics Viewer\n"
         )
         dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="PythonPad Diagnostics")
         dialog.set_markup(text)
@@ -1122,13 +1213,16 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         dialog.set_website_label("PythonPad on GitHub")
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
         if os.path.exists(icon_path):
-            dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 96, 96, True))
+            try:
+                dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 96, 96, True))
+            except Exception:
+                pass
         dialog.run()
         dialog.destroy()
 
     def _show_error(self, msg):
         dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK, text="PythonPad Error")
-        dialog.format_secondary_text(msg)
+        dialog.format_secondary_text(str(msg))
         dialog.run()
         dialog.destroy()
 
@@ -1155,8 +1249,12 @@ class PythonPadWindow(Gtk.ApplicationWindow):
                 if resp == Gtk.ResponseType.YES:
                     if not self.on_save(ed):
                         return True
-                elif resp == Gtk.ResponseType.CANCEL:
+                elif resp != Gtk.ResponseType.NO:
                     return True
+
+        # Stop any active background script runner before quitting
+        if hasattr(self, 'panel') and self.panel.runner.is_running:
+            self.panel.runner.stop()
         return False
 
 
@@ -1173,7 +1271,7 @@ class PythonPadApp(Gtk.Application):
         win.present()
 
     def do_open(self, files, n_files, hint):
-        paths = [f.get_path() for f in files]
+        paths = [f.get_path() for f in files if f.get_path()]
         win = PythonPadWindow(self, initial_files=paths)
         win.present()
 

@@ -1,5 +1,9 @@
 # PythonPad
 
+<p align="center">
+  <img src="pythonpad.svg" alt="PythonPad Logo" width="160" height="160">
+</p>
+
 A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic font scaling, subpixel anti-aliasing), **Line Numbers**, **Multi-Tab Document Editing**, **Interactive Python Shell**, and **System Base Python Interpreter Execution**, built natively for **Linux Mint Cinnamon** using Python 3, GTK 3, and GtkSourceView 4.
 
 ---
@@ -7,9 +11,9 @@ A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic 
 ## Key Features
 
 ### System Base Python Execution & Interactive Shell
-- **Run Script in Base Interpreter (`F5`)**: Execute Python scripts directly using the system base interpreter (e.g. `/usr/bin/python3`) with real-time stdout and stderr output streams.
-- **Run with Arguments (`Shift + F5`)**: Launch scripts with custom command-line arguments.
-- **Interactive Python Shell**: Persistent interactive REPL session with command history (`Up`/`Down` arrows), multi-line continuation, and shell restart (`Ctrl + F6`).
+- **Run Script in Base Interpreter (`F5`)**: Execute Python scripts directly using the active base interpreter (e.g. `python3.12`) with real-time unbuffered stdout/stderr streaming and interactive `stdin` input support.
+- **Run with Arguments (`Shift + F5`)**: Launch scripts with custom command-line arguments parsed safely via `shlex`.
+- **Interactive Python Shell**: Persistent interactive REPL session with command history (`Up`/`Down` arrows), multi-line continuation, modal `input()` prompt bridging, `SystemExit`/`KeyboardInterrupt` isolation, and shell restart (`Ctrl + F6`).
 - **Interpreter Selector**: Switch seamlessly between system base Python, specific versions (`python3.12`), or virtual environments (*Menu -> Python Execution -> Select Python Interpreter*).
 - **Module Syntax Verification (`Alt + X`)**: Instant syntax check using Python's built-in AST parser without running the script.
 

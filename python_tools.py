@@ -10,20 +10,26 @@ import sys
 import io
 import json
 import code
+import codecs
+import signal
 import shutil
+import builtins
 import tempfile
 import subprocess
 import threading
+import time
 import ast
 
 
 class Diagnostic:
     """Represents a single linter diagnostic (error, warning, convention, etc.)."""
 
+    __slots__ = ("line", "column", "severity", "code", "message", "symbol")
+
     def __init__(self, line=1, column=1, severity="convention", code="", message="", symbol=""):
-        self.line = max(1, int(line))
-        self.column = max(1, int(column))
-        self.severity = severity.lower()
+        self.line = max(1, int(line) if isinstance(line, (int, str)) and str(line).isdigit() else 1)
+        self.column = max(1, int(column) if isinstance(column, (int, str)) and str(column).isdigit() else 1)
+        self.severity = (severity or "convention").lower()
         self.code = code or ""
         self.message = message or ""
         self.symbol = symbol or ""
@@ -36,6 +42,23 @@ class InterpreterManager:
     """Detects and manages system base and custom Python interpreters."""
 
     _active_interpreter = None
+    _version_cache = {}
+
+    @classmethod
+    def _resolve_binary(cls, path: str):
+        """Resolve a path to an executable Python binary (handling directories gracefully)."""
+        if not path:
+            return None
+        expanded = os.path.abspath(os.path.expanduser(path))
+        if os.path.isdir(expanded):
+            for sub in ("python", "python3", os.path.join("bin", "python3"), os.path.join("bin", "python")):
+                cand = os.path.join(expanded, sub)
+                if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                    return os.path.realpath(cand)
+            return None
+        if os.path.isfile(expanded) and os.access(expanded, os.X_OK):
+            return os.path.realpath(expanded)
+        return None
 
     @classmethod
     def get_default_interpreter(cls) -> str:
@@ -47,27 +70,48 @@ class InterpreterManager:
             "/usr/bin/python3",
         ]
         for c in candidates:
-            if c and os.path.exists(c) and os.path.isfile(c) and os.access(c, os.X_OK):
-                return os.path.realpath(c)
+            resolved = cls._resolve_binary(c)
+            if resolved:
+                return resolved
         return sys.executable or "/usr/bin/python3"
 
     @classmethod
     def get_active_interpreter(cls) -> str:
-        if cls._active_interpreter and os.path.exists(cls._active_interpreter):
-            return cls._active_interpreter
+        resolved = cls._resolve_binary(cls._active_interpreter)
+        if resolved:
+            return resolved
         return cls.get_default_interpreter()
 
     @classmethod
-    def set_active_interpreter(cls, path: str):
-        if path and os.path.exists(path):
-            cls._active_interpreter = os.path.abspath(path)
+    def set_active_interpreter(cls, path: str) -> bool:
+        resolved = cls._resolve_binary(path)
+        if resolved:
+            cls._active_interpreter = resolved
+            return True
+        return False
 
     @classmethod
     def get_interpreter_version(cls, path=None) -> str:
-        interp = path or cls.get_active_interpreter()
+        interp = cls._resolve_binary(path) if path else cls.get_active_interpreter()
+        if not interp:
+            return "Python 3"
         try:
-            res = subprocess.run([interp, "--version"], capture_output=True, text=True, timeout=3)
-            return res.stdout.strip() or res.stderr.strip() or "Python 3"
+            mtime = os.path.getmtime(interp)
+            cache_key = (interp, mtime)
+            if cache_key in cls._version_cache:
+                return cls._version_cache[cache_key]
+
+            res = subprocess.run(
+                [interp, "--version"],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=3,
+                check=False
+            )
+            ver = (res.stdout.strip() or res.stderr.strip() or "Python 3").splitlines()[0]
+            cls._version_cache[cache_key] = ver
+            return ver
         except Exception:
             return "Python 3"
 
@@ -87,67 +131,128 @@ class InterpreterManager:
         ]
         seen = set()
         for path in candidates:
-            if path and os.path.exists(path) and os.path.isfile(path):
-                real = os.path.realpath(path)
-                if real not in seen:
-                    seen.add(real)
-                    ver = cls.get_interpreter_version(path)
-                    found.append((path, ver))
+            resolved = cls._resolve_binary(path)
+            if resolved and resolved not in seen:
+                seen.add(resolved)
+                ver = cls.get_interpreter_version(resolved)
+                found.append((path if os.path.isfile(os.path.expanduser(path or "")) else resolved, ver))
         return found
+
+
+class _ShellExitHint:
+    """Safe replacement for exit()/quit() inside the in-process interactive shell."""
+
+    def __repr__(self):
+        return "Use Ctrl+F6 (or Restart Shell button) to reset the shell, or Ctrl+Q to quit PythonPad."
+
+    def __call__(self, code=None):
+        print(self.__repr__())
+
+
+class _NonBlockingStdin(io.StringIO):
+    """Prevents raw sys.stdin.readline() from deadlocking the GTK main thread."""
+
+    def __init__(self, input_handler=None):
+        super().__init__()
+        self._input_handler = input_handler
+
+    def readline(self, *args, **kwargs):
+        if self._input_handler is not None:
+            val = self._input_handler("")
+            if val is not None:
+                return val + "\n"
+        raise EOFError(
+            "Interactive stdin cannot block the shell without input. "
+            "Use the Script Runner (F5) console input bar for interactive scripts."
+        )
 
 
 class InteractiveShellSession:
     """
     Persistent Python interactive REPL session.
-    Maintains variables, functions, and state across commands.
+    Maintains variables, functions, and state across commands safely.
     """
 
-    def __init__(self):
-        self.locals = {
-            '__name__': '__main__',
-            '__doc__': 'PythonPad Interactive Shell',
-            '__package__': None,
-        }
+    def __init__(self, input_handler=None):
+        self.input_handler = input_handler
+        self.locals = self._create_clean_locals()
         self.console = code.InteractiveConsole(self.locals)
         self.banner = (
             f"PythonPad Interactive Shell\n"
             f"Interpreter: {InterpreterManager.get_active_interpreter()} ({InterpreterManager.get_interpreter_version()})\n"
-            f"Type \"help()\", \"copyright\", \"credits\" or \"license\" for more information.\n"
+            f"Type Python expressions below. Use Up/Down arrows for command history.\n"
         )
         self.buffer = []
 
-    def restart(self):
-        """Reset the shell environment to a clean state."""
-        self.locals = {
+    def _shell_input(self, prompt=""):
+        if prompt:
+            sys.stdout.write(str(prompt))
+            sys.stdout.flush()
+        if self.input_handler is not None:
+            res = self.input_handler(str(prompt))
+            if res is not None:
+                print(res)
+                return res
+            raise EOFError("Input cancelled")
+        raise EOFError("Interactive input() requires a UI input handler or Script Runner (F5).")
+
+    def _create_clean_locals(self):
+        exit_hint = _ShellExitHint()
+        return {
             '__name__': '__main__',
             '__doc__': 'PythonPad Interactive Shell',
             '__package__': None,
+            'exit': exit_hint,
+            'quit': exit_hint,
+            'input': self._shell_input,
         }
+
+    def restart(self):
+        """Reset the shell environment to a clean state."""
+        self.locals = self._create_clean_locals()
         self.console = code.InteractiveConsole(self.locals)
         self.buffer.clear()
         return "=== Shell Restarted: Clean Global State ===\n"
 
     def push_line(self, line: str):
         """
-        Push a line to the console.
+        Push a line to the console safely.
+        Catches SystemExit and KeyboardInterrupt so they never crash the main application.
         Returns (output_text, is_continuation_needed).
         """
         out_capture = io.StringIO()
         old_stdout = sys.stdout
         old_stderr = sys.stderr
+        old_stdin = sys.stdin
+        old_input = builtins.input
         sys.stdout = out_capture
         sys.stderr = out_capture
+        sys.stdin = _NonBlockingStdin(self.input_handler)
+        builtins.input = self._shell_input
 
+        more = False
         try:
             more = self.console.push(line)
-        except Exception:
+        except SystemExit as e:
+            out_capture.write(f"[SystemExit: {e.code if e.code is not None else 0}]\n")
+            self.console.resetbuffer()
+            more = False
+        except KeyboardInterrupt:
+            out_capture.write("\nKeyboardInterrupt\n")
+            self.console.resetbuffer()
+            more = False
+        except BaseException:
             self.console.showtraceback()
+            self.console.resetbuffer()
             more = False
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+            sys.stdin = old_stdin
+            builtins.input = old_input
 
-        return out_capture.getvalue(), more
+        output = out_capture.getvalue().replace("\x00", "\ufffd")
+        return output, more
 
 
 class PythonLinter:
@@ -217,14 +322,14 @@ class PythonLinter:
 
     @classmethod
     def _run_pylint(cls, file_path, content):
-        """Execute pylint CLI with JSON output format."""
+        """Execute pylint CLI with JSON output format safely."""
         temp_file = None
         target_path = file_path
 
-        if not target_path or not os.path.exists(target_path) or content:
+        if not target_path or not os.path.exists(target_path) or content is not None:
             try:
                 fd, temp_file = tempfile.mkstemp(prefix="pythonpad_lint_", suffix=".py")
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                with os.fdopen(fd, "w", encoding="utf-8", errors="replace") as f:
                     f.write(content if content else "")
                 target_path = temp_file
             except Exception as e:
@@ -236,11 +341,19 @@ class PythonLinter:
             "--output-format=json",
             "--reports=n",
             "--score=n",
-            target_path
+            "--",
+            os.path.abspath(target_path)
         ]
 
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=15,
+                check=False
+            )
             stdout = proc.stdout.strip()
             if not stdout:
                 return []
@@ -253,7 +366,7 @@ class PythonLinter:
 
                 results.append(Diagnostic(
                     line=item.get("line", 1),
-                    column=item.get("column", 1),
+                    column=max(1, int(item.get("column", 0)) + 1),
                     severity=severity,
                     code=item.get("message-id", ""),
                     message=item.get("message", ""),
@@ -299,6 +412,7 @@ class PythonRunner:
     def __init__(self):
         self.process = None
         self._thread = None
+        self._lock = threading.Lock()
         self.is_running = False
 
     def run(self, file_path, on_output, on_finished, script_args=None, custom_interpreter=None):
@@ -307,43 +421,61 @@ class PythonRunner:
         on_output(text: str, is_stderr: bool)
         on_finished(returncode: int)
         """
-        if self.is_running:
-            return False
+        with self._lock:
+            if self.is_running:
+                return False
+            if not file_path or not os.path.isfile(file_path):
+                on_output(f"Error: File '{file_path}' does not exist on disk. Save the file first.\n", True)
+                on_finished(1)
+                return False
+            self.is_running = True
 
-        if not file_path or not os.path.exists(file_path):
-            on_output(f"Error: File '{file_path}' does not exist on disk. Save the file first.\n", True)
-            on_finished(1)
-            return False
-
-        self.is_running = True
+        abs_file = os.path.abspath(file_path)
         interpreter = custom_interpreter or InterpreterManager.get_active_interpreter()
-        args = script_args or []
+        args = list(script_args) if script_args else []
 
         def _worker():
-            work_dir = os.path.dirname(os.path.abspath(file_path))
-            cmd = [interpreter, "-u", file_path] + args
+            work_dir = os.path.dirname(abs_file) or "."
+            cmd = [interpreter, "-u", abs_file] + args
+            rc = -1
 
             try:
-                self.process = subprocess.Popen(
+                proc = subprocess.Popen(
                     cmd,
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     cwd=work_dir,
-                    text=True,
-                    bufsize=1
+                    bufsize=0,
+                    start_new_session=True
                 )
+                with self._lock:
+                    self.process = proc
 
-                def _stream_reader(stream, is_err):
+                def _stream_reader(pipe, is_err):
+                    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+                    fd = pipe.fileno()
                     try:
-                        for line in iter(stream.readline, ""):
-                            on_output(line, is_err)
+                        while True:
+                            chunk = os.read(fd, 4096)
+                            if not chunk:
+                                break
+                            text = decoder.decode(chunk, final=False).replace("\x00", "\ufffd")
+                            if text:
+                                on_output(text, is_err)
+                        tail = decoder.decode(b"", final=True).replace("\x00", "\ufffd")
+                        if tail:
+                            on_output(tail, is_err)
                     except Exception:
                         pass
                     finally:
-                        stream.close()
+                        try:
+                            pipe.close()
+                        except Exception:
+                            pass
 
-                t_out = threading.Thread(target=_stream_reader, args=(self.process.stdout, False), daemon=True)
-                t_err = threading.Thread(target=_stream_reader, args=(self.process.stderr, True), daemon=True)
+                t_out = threading.Thread(target=_stream_reader, args=(proc.stdout, False), daemon=True)
+                t_err = threading.Thread(target=_stream_reader, args=(proc.stderr, True), daemon=True)
 
                 t_out.start()
                 t_err.start()
@@ -351,24 +483,68 @@ class PythonRunner:
                 t_out.join()
                 t_err.join()
 
-                rc = self.process.wait()
+                rc = proc.wait()
             except Exception as e:
                 on_output(f"\nExecution failed: {e}\n", True)
                 rc = -1
             finally:
-                self.is_running = False
-                self.process = None
+                with self._lock:
+                    if self.process and self.process.stdin:
+                        try:
+                            self.process.stdin.close()
+                        except Exception:
+                            pass
+                    self.process = None
+                    self.is_running = False
                 on_finished(rc)
 
         self._thread = threading.Thread(target=_worker, daemon=True)
         self._thread.start()
         return True
 
+    def send_input(self, line: str) -> bool:
+        """Send a line of text to the running process's stdin."""
+        with self._lock:
+            proc = self.process
+        if not proc or proc.poll() is not None or not proc.stdin:
+            return False
+        try:
+            data = (line + "\n").encode("utf-8", errors="replace")
+            proc.stdin.write(data)
+            proc.stdin.flush()
+            return True
+        except Exception:
+            return False
+
     def stop(self):
-        """Terminate the active running process."""
-        if self.process and self.is_running:
+        """Terminate the active running process group cleanly, escalating to SIGKILL if needed."""
+        with self._lock:
+            proc = self.process
+        if not proc or proc.poll() is not None:
+            return
+
+        def _kill_tree(p):
             try:
-                self.process.terminate()
+                pgid = os.getpgid(p.pid)
+                os.killpg(pgid, signal.SIGTERM)
             except Exception:
-                pass
-            self.is_running = False
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+
+            for _ in range(15):
+                if p.poll() is not None:
+                    return
+                time.sleep(0.05)
+
+            try:
+                pgid = os.getpgid(p.pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except Exception:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+
+        threading.Thread(target=_kill_tree, args=(proc,), daemon=True).start()
