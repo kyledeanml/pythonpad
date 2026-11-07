@@ -10,7 +10,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 - **Dynamic Retina Zooming**: Scale the text size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
 - **Cairo Subpixel Anti-Aliasing**: Fine-tuned CSS rules and Pango font descriptions preserve crisp glyph rendering on high-resolution displays (Full HD, 2K, 3K, 4K, and Apple Retina screens).
 - **Scalable Vector Artwork**: High-definition SVG application icon (`retinapad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
-- **Retina Diagnostics**: Built-in monitor resolution, display scale factor, and Cairo subpixel diagnostics dialog (*Menu → Retina Vision / HiDPI Info*).
+- **Retina Diagnostics**: Built-in monitor resolution, display scale factor, and Cairo subpixel diagnostics dialog (*Menu -> Retina Vision / HiDPI Info*).
 
 ### Crisp Line Numbers & Navigation
 - **Line Numbers Gutter**: High-contrast, beautifully padded line numbers margin that scales proportionally with the font size.
@@ -30,7 +30,7 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
   - `oblivion` & `cobalt` (High-contrast dark modes)
   - `classic` & `tango` (Crisp light modes)
 - **Font Selector**: Pick any installed monospace font (e.g. *DejaVu Sans Mono*, *Liberation Mono*, *Fira Code*, *JetBrains Mono*).
-- **Word Wrap**: Toggleable word wrap mode (`Menu → Word Wrap`).
+- **Word Wrap**: Toggleable word wrap mode (`Menu -> Word Wrap`).
 
 ### Real-Time Status Bar
 - Cursor Position: `Ln X, Col Y`
@@ -43,21 +43,22 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 ## Getting Started
 
 ### 1. Launch Directly
-To launch RetinaPad immediately from the terminal:
+Clone and launch RetinaPad from the terminal:
 ```bash
-cd /home/bluechile/.gemini/antigravity/scratch/retina-notepad
+git clone https://github.com/kyledeanml/retina-notepad.git
+cd retina-notepad
 ./run.sh
 ```
 
 Or open a specific file:
 ```bash
-./run.sh /path/to/document.txt
+./run.sh path/to/document.txt
 ```
 
 ### 2. Install to Linux Mint Cinnamon Menu
-To add RetinaPad to your Cinnamon application menu (*Mint Menu → Accessories → RetinaPad*):
+To add RetinaPad to your Cinnamon application menu (*Mint Menu -> Accessories -> RetinaPad*):
 ```bash
-cd /home/bluechile/.gemini/antigravity/scratch/retina-notepad
+cd retina-notepad
 ./install.sh
 ```
 
@@ -87,6 +88,6 @@ cd /home/bluechile/.gemini/antigravity/scratch/retina-notepad
 ## Linux Mint HiDPI Display Settings Tip
 
 For high-resolution monitors on Linux Mint Cinnamon:
-1. Open **System Settings → General**.
+1. Open **System Settings -> General**.
 2. Under **Desktop Scaling**, select **Auto** or **Double (HiDPI)**.
 3. In RetinaPad, you can use `Ctrl + Mouse Wheel` or the zoom buttons on the HeaderBar to adjust text readability without blurring.
