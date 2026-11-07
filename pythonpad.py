@@ -888,7 +888,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             "line numbers, interactive Python shell, advanced editing operations, "
             "and system base interpreter script execution for Linux Mint Cinnamon."
         )
-        dialog.set_website("https://github.com/kyledeanml/retina-notepad")
+        dialog.set_website("https://github.com/kyledeanml/pythonpad")
         dialog.set_website_label("PythonPad on GitHub")
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
         if os.path.exists(icon_path):

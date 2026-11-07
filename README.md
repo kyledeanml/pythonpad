@@ -74,8 +74,8 @@ sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gtkso
 
 ### 2. Clone Repository
 ```bash
-git clone https://github.com/kyledeanml/retina-notepad.git
-cd retina-notepad
+git clone https://github.com/kyledeanml/pythonpad.git
+cd pythonpad
 ```
 
 ### 3. Run Installer
