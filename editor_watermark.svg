@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 320" width="360" height="320">
+  <defs>
+    <!-- Darker Traditional Python Blue Gradient -->
+    <linearGradient id="pyDarkBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#306998" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#1e4263" stop-opacity="0.18"/>
+    </linearGradient>
+
+    <!-- Deeper Indigo-Blue for Bottom Python Snake -->
+    <linearGradient id="pyDeepBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#25547c" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#16324b" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- Unassuming Matte Yoga Pad Surface Gradient -->
+    <linearGradient id="yogaMatTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#152943" stop-opacity="0.13"/>
+    </linearGradient>
+
+    <!-- Yoga Pad Rolled End Gradient -->
+    <linearGradient id="yogaRoll" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#284c7a" stop-opacity="0.19"/>
+      <stop offset="100%" stop-color="#13253d" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Unassuming Yoga Pad / Mat in Perspective -->
+  <g transform="translate(0, 12)">
+    <!-- Subtle floor shadow beneath the yoga pad -->
+    <path d="M 48 258 L 288 258 L 328 214 L 92 214 Z"
+          fill="#060c17" fill-opacity="0.22"/>
+
+    <!-- Yoga Pad Thickness / Bottom Edge -->
+    <path d="M 44 248 L 282 248 L 322 204 L 322 210 L 282 254 L 44 254 Z"
+          fill="#1b3556" fill-opacity="0.20"
+          stroke="#2b5484" stroke-width="1" stroke-opacity="0.20" stroke-linejoin="round"/>
+
+    <!-- Yoga Pad Main Flat Surface -->
+    <path d="M 44 248 L 282 248 L 322 204 L 88 204 Z"
+          fill="url(#yogaMatTop)"
+          stroke="#2c588a" stroke-width="1.2" stroke-opacity="0.22" stroke-linejoin="round"/>
+
+    <!-- Subtle Non-Slip Texture Lines & Center Alignment Line on the Yoga Pad -->
+    <line x1="70" y1="226" x2="298" y2="226"
+          stroke="#387eb8" stroke-width="0.9" stroke-opacity="0.13" stroke-dasharray="6,5"/>
+    <line x1="176" y1="207" x2="152" y2="245"
+          stroke="#387eb8" stroke-width="0.8" stroke-opacity="0.11"/>
+
+    <!-- Rolled-Up End of the Yoga Pad (Left Side Cylinder) -->
+    <path d="M 38 236 C 34 236 31 240 31 245 C 31 250 34 254 38 254 L 82 208 C 78 208 75 204 75 199 C 75 194 78 190 82 190 Z"
+          fill="url(#yogaRoll)"
+          stroke="#2c588a" stroke-width="1.1" stroke-opacity="0.22"/>
+
+    <!-- Yoga Pad Roll Spiral End-Cap -->
+    <ellipse cx="40" cy="245" rx="7" ry="9"
+             fill="#152943" fill-opacity="0.22"
+             stroke="#306998" stroke-width="1.1" stroke-opacity="0.24"/>
+    <path d="M 40 241 C 42 241 43 243 43 245 C 43 247 41 249 39 249 C 37 249 36 246 37 244"
+          fill="none" stroke="#387eb8" stroke-width="0.9" stroke-opacity="0.22" stroke-linecap="round"/>
+
+    <!-- Soft Contact Shadow Where the Python Logo Rests on the Yoga Pad -->
+    <ellipse cx="182" cy="226" rx="58" ry="11"
+             fill="#07111f" fill-opacity="0.25"/>
+  </g>
+
+  <!-- Traditional Intertwined Python Logo (Darker Blue & Translucent) Sitting on the Pad -->
+  <g transform="translate(88, 52) scale(1.35)">
+    <!-- Top Snake (Traditional Darker Python Blue) -->
+    <path d="M 68 34 C 48 34 38 42 38 54 L 38 64 L 68 64 L 68 70 L 26 70 C 14 70 6 78 6 92 C 6 106 14 114 26 114 L 36 114 L 36 100 C 36 88 46 80 58 80 L 88 80 C 98 80 106 72 106 62 L 106 50 C 106 38 96 34 84 34 Z"
+          fill="url(#pyDarkBlue)"
+          stroke="#387eb8" stroke-width="1.1" stroke-opacity="0.24"/>
+    <!-- Top Snake Eye -->
+    <circle cx="50" cy="46" r="4.2" fill="#0a0e1a" fill-opacity="0.35"/>
+    <circle cx="50" cy="46" r="2.8" fill="#7dd3fc" fill-opacity="0.22"/>
+
+    <!-- Bottom Snake (Deeper Navy/Slate Blue) -->
+    <path d="M 72 106 C 92 106 102 98 102 86 L 102 76 L 72 76 L 72 70 L 114 70 C 126 70 134 62 134 48 C 134 34 126 26 114 26 L 104 26 L 104 40 C 104 52 94 60 82 60 L 52 60 C 42 60 34 68 34 78 L 34 90 C 34 102 44 106 56 106 Z"
+          fill="url(#pyDeepBlue)"
+          stroke="#2b6cb0" stroke-width="1.1" stroke-opacity="0.22"/>
+    <!-- Bottom Snake Eye -->
+    <circle cx="90" cy="94" r="4.2" fill="#0a0e1a" fill-opacity="0.35"/>
+    <circle cx="90" cy="94" r="2.8" fill="#7dd3fc" fill-opacity="0.20"/>
+  </g>
+</svg>

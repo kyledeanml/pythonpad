@@ -229,6 +229,12 @@ class TestAppAssets(unittest.TestCase):
         self.assertTrue(root.tag.endswith('svg'))
         self.assertEqual(root.attrib.get('viewBox'), '0 0 512 512')
 
+        watermark_path = os.path.join(self.base_dir, "editor_watermark.svg")
+        self.assertTrue(os.path.exists(watermark_path), "editor_watermark.svg does not exist")
+        w_tree = ET.parse(watermark_path)
+        self.assertTrue(w_tree.getroot().tag.endswith('svg'))
+        self.assertIsNotNone(RetinaEditor._get_watermark_pixbuf())
+
     def test_desktop_file_exists(self):
         desktop_path = os.path.join(self.base_dir, "pythonpad.desktop")
         self.assertTrue(os.path.exists(desktop_path), "pythonpad.desktop does not exist")

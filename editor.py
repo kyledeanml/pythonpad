@@ -11,10 +11,12 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
 gi.require_version('GtkSource', '4')
 gi.require_version('Pango', '1.0')
 
-from gi.repository import Gtk, Gdk, GtkSource, Pango, GObject
+from gi.repository import Gtk, Gdk, GdkPixbuf, GtkSource, Pango, GObject
+import cairo
 
 
 # Ensure styles directory is in GtkSource StyleSchemeManager path
@@ -43,6 +45,8 @@ class RetinaEditor(Gtk.ScrolledWindow):
     ]
     DEFAULT_ZOOM_INDEX = 5  # 1.00 (100%)
     _shared_css_provider = None
+    _watermark_pixbuf = None
+    _watermark_loaded = False
 
     def __init__(self, file_path=None):
         super().__init__()
@@ -146,6 +150,60 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
         # Ctrl + Mouse Wheel for Retina Zoom
         self.source_view.connect("scroll-event", self._on_scroll_event)
+
+        # Translucent Python-on-Yoga-Pad background watermark
+        self.source_view.connect_after("draw", self._on_draw_watermark)
+
+    @classmethod
+    def _get_watermark_pixbuf(cls):
+        """Load and cache the translucent Python logo on yoga pad SVG pixbuf."""
+        if not cls._watermark_loaded:
+            cls._watermark_loaded = True
+            svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor_watermark.svg")
+            if os.path.exists(svg_path):
+                try:
+                    cls._watermark_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        svg_path, 340, 300, True
+                    )
+                except Exception:
+                    cls._watermark_pixbuf = None
+        return cls._watermark_pixbuf
+
+    def _on_draw_watermark(self, widget, cr):
+        """Render the translucent darker-blue Python logo sitting on an unassuming yoga pad."""
+        pixbuf = self._get_watermark_pixbuf()
+        if pixbuf is None:
+            return False
+
+        try:
+            text_win = widget.get_window(Gtk.TextWindowType.TEXT)
+            alloc = widget.get_allocation()
+            if text_win is not None:
+                gutter_w = alloc.width - text_win.get_width()
+                view_w = text_win.get_width()
+                view_h = text_win.get_height()
+            else:
+                gutter_w = 48
+                view_w = alloc.width - gutter_w
+                view_h = alloc.height
+
+            pw = pixbuf.get_width()
+            ph = pixbuf.get_height()
+            if view_w < 120 or view_h < 120:
+                return False
+
+            # Center the watermark in the lower-right / center-right of the editor canvas
+            x = gutter_w + max(20, (view_w - pw) * 0.55)
+            y = max(20, (view_h - ph) * 0.58)
+
+            cr.save()
+            cr.set_operator(cairo.OPERATOR_OVER)
+            Gdk.cairo_set_source_pixbuf(cr, pixbuf, x, y)
+            cr.paint_with_alpha(0.85)
+            cr.restore()
+        except Exception:
+            pass
+        return False
 
     def _on_buffer_changed(self, buffer):
         """Track modification state and mark document stats cache dirty."""
