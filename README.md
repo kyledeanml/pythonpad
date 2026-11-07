@@ -1,26 +1,41 @@
-# RetinaPad
+# PythonPad
 
-A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font scaling, subpixel anti-aliasing), **Line Numbers**, and an integrated **Pylint Viewer & Native Python Runner**, built natively for **Linux Mint Cinnamon** using Python 3, GTK 3, and GtkSourceView 4.
+A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic font scaling, subpixel anti-aliasing), **Line Numbers**, **Multi-Tab Document Editing**, **Interactive Python Shell**, and **System Base Python Interpreter Execution**, built natively for **Linux Mint Cinnamon** using Python 3, GTK 3, and GtkSourceView 4.
 
 ---
 
 ## Key Features
 
-### Native Python Compatibility & Pylint Viewer
-- **Integrated Pylint Diagnostics**: Run Pylint analysis with one click or shortcut (`F8` / `Ctrl + Shift + L`). Shows severity (Error, Warning, Refactor, Convention), line, column, rule code (e.g. `C0114`, `W0611`), and full message.
-- **Click-to-Jump Navigation**: Double-click or select any diagnostic row to jump the cursor immediately to that exact line and column in the editor.
-- **Native Python AST Syntax Checker**: Instant syntax error detection powered by Python's built-in AST parser, providing accurate syntax diagnostics even without external dependencies.
-- **Native Python Script Runner (`F5`)**: Execute Python scripts directly inside an integrated console panel with live stdout/stderr color streams and process stop controls.
-- **Python Syntax Highlighting & Indentation**: Full language highlighting, smart 4-space tab indentation, and matching bracket highlights.
+### System Base Python Execution & Interactive Shell
+- **Run Script in Base Interpreter (`F5`)**: Execute Python scripts directly using the system base interpreter (e.g. `/usr/bin/python3`) with real-time stdout and stderr output streams.
+- **Run with Arguments (`Shift + F5`)**: Launch scripts with custom command-line arguments.
+- **Interactive Python Shell**: Persistent interactive REPL session with command history (`Up`/`Down` arrows), multi-line continuation, and shell restart (`Ctrl + F6`).
+- **Interpreter Selector**: Switch seamlessly between system base Python, specific versions (`python3.12`), or virtual environments (*Menu -> Python Execution -> Select Python Interpreter*).
+- **Module Syntax Verification (`Alt + X`)**: Instant syntax check using Python's built-in AST parser without running the script.
+
+### Advanced Code Editing & Multi-Tab Interface
+- **Multi-Tab Editing**: Work on multiple files simultaneously with individual tab modified indicators and close buttons (`Ctrl + T` / `Ctrl + N` new tab, `Ctrl + W` close tab).
+- **Toggle Comments (`Ctrl + /`)**: Comment or uncomment current lines or selections with `#`.
+- **Duplicate Line (`Ctrl + D`)**: Duplicate the active line or selection.
+- **Delete Line (`Ctrl + Shift + K`)**: Delete the entire current line.
+- **Move Lines (`Alt + Up` / `Alt + Down`)**: Shift lines up or down fluidly.
+- **Join Lines (`Ctrl + J`)**: Join current line with the next.
+- **Case Conversion (`Ctrl + Shift + U` / `Ctrl + U`)**: Transform selected text to UPPERCASE or lowercase.
+- **Block Indentation (`Ctrl + ]` / `Ctrl + [`)**: Indent or unindent selected code blocks by 4 spaces.
+
+### Pylint & Code Diagnostics Viewer
+- **Integrated Diagnostics Table (`F8` / `Ctrl + Shift + L`)**: View all code issues categorized by Severity (Error, Warning, Refactor, Convention), Line, Column, Rule Code (e.g. `C0114`, `W0611`), and Message.
+- **Click-to-Jump Navigation**: Double-click or select any diagnostic row to jump the editor cursor directly to that exact line and column.
+- **Native AST Syntax Fallback**: Instant syntax error detection even if external tools are not installed.
 
 ### Retina Vision (HiDPI & Sharp Typography)
-- **Dynamic Retina Zooming**: Scale the text size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
+- **Dynamic Retina Zooming**: Scale font size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
 - **Cairo Subpixel Anti-Aliasing**: Fine-tuned CSS rules and Pango font descriptions preserve crisp glyph rendering on high-resolution displays (Full HD, 2K, 3K, 4K, and Apple Retina screens).
-- **Scalable Vector Artwork**: High-definition SVG application icon (`retinapad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
+- **Scalable Vector Artwork**: High-definition SVG application icon (`pythonpad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
 - **Retina Diagnostics**: Built-in monitor resolution, display scale factor, and Cairo subpixel diagnostics dialog (*Menu -> Retina Vision / HiDPI Info*).
 
 ### Crisp Line Numbers & Navigation
-- **Line Numbers Gutter**: High-contrast, beautifully padded line numbers margin that scales proportionally with the font size.
+- **Line Numbers Gutter**: High-contrast line numbers margin that scales proportionally with font size.
 - **Active Line Highlighting**: Subtly highlights the current line to keep focus.
 - **Go to Line (`Ctrl + G`)**: Instantly jump to any line in your document.
 - **One-Click Toggle**: Turn line numbers on or off anytime with the headerbar toggle button.
@@ -42,8 +57,9 @@ A simple, fast, and elegant Notepad with **Retina Vision** (HiDPI dynamic font s
 ### Real-Time Status Bar
 - Cursor Position: `Ln X, Col Y`
 - Document Metrics: `X lines, Y words, Z chars`
+- Active Interpreter: `Python: 3.12.3 (Base)`
+- File Format: `UTF-8 | LF`
 - Retina Zoom Level: `Retina: 100%`
-- Character Encoding: `UTF-8`
 
 ---
 
@@ -67,17 +83,17 @@ cd retina-notepad
 ./install.sh
 ```
 The installer automatically:
-- Installs the high-DPI vector icon into `~/.local/share/icons/hicolor/scalable/apps/`.
-- Installs the desktop launcher with `StartupWMClass=retinapad` for window grouping into `~/.local/share/applications/`.
-- Creates a CLI binary symlink at `~/.local/bin/retinapad`.
-- Adds RetinaPad to Cinnamon's application favorites.
+- Installs the high-DPI vector icon into `~/.local/share/icons/hicolor/scalable/apps/pythonpad.svg`.
+- Installs the desktop launcher with `StartupWMClass=pythonpad` for window grouping into `~/.local/share/applications/pythonpad.desktop`.
+- Creates a CLI binary symlink at `~/.local/bin/pythonpad`.
+- Adds PythonPad to Cinnamon's application favorites.
 
-### 4. Put RetinaPad on the Cinnamon Panel
-Once installed, you can add RetinaPad directly to your taskbar/panel:
+### 4. Put PythonPad on the Cinnamon Panel
+Once installed, you can add PythonPad directly to your taskbar/panel:
 1. Open the **Cinnamon Menu** (bottom-left corner).
-2. Find **RetinaPad** (under *Accessories* or *Programming*).
-3. **Right-click** RetinaPad and click **"Add to panel"**.
-*(Alternatively, drag the RetinaPad icon from the menu and drop it onto the panel).*
+2. Find **PythonPad** (under *Programming* or *Favorites*).
+3. **Right-click** PythonPad and click **"Add to panel"**.
+*(Alternatively, drag the PythonPad icon from the menu and drop it onto the panel).*
 
 ---
 
@@ -85,22 +101,29 @@ Once installed, you can add RetinaPad directly to your taskbar/panel:
 
 | Shortcut | Action |
 | :--- | :--- |
-| `F5` | **Run Python Script** (in bottom console) |
+| `F5` | **Run Script in Base Interpreter** |
+| `Shift + F5` | **Run Script with Arguments** |
+| `Alt + X` | **Check Module Syntax** |
+| `Ctrl + F6` | **Restart Interactive Shell** |
 | `F8` / `Ctrl + Shift + L` | **Run Pylint & Diagnostics Panel** |
-| `Ctrl + N` | New Document |
+| `Ctrl + /` | **Toggle Line Comment** |
+| `Ctrl + D` | **Duplicate Line or Selection** |
+| `Ctrl + Shift + K` | **Delete Current Line** |
+| `Alt + Up` / `Alt + Down` | **Move Line Up / Down** |
+| `Ctrl + J` | **Join Lines** |
+| `Ctrl + Shift + U` / `Ctrl + U` | **Convert to UPPERCASE / lowercase** |
+| `Ctrl + ]` / `Ctrl + [` | **Indent / Unindent Block** |
+| `Ctrl + T` / `Ctrl + N` | **New Tab** |
+| `Ctrl + W` | **Close Current Tab** |
+| `Ctrl + PageUp` / `PageDown` | **Switch Tabs** |
 | `Ctrl + O` | Open File |
-| `Ctrl + S` | Save File |
-| `Ctrl + Shift + S` | Save As |
-| `Ctrl + F` | Find |
-| `Ctrl + H` | Find and Replace |
+| `Ctrl + S` / `Ctrl + Shift + S` | Save / Save As |
+| `Ctrl + F` / `Ctrl + H` | Find / Replace Bar |
 | `Ctrl + G` | Go to Line |
-| `Ctrl + +` / `Ctrl + =` | **Retina Zoom In** |
-| `Ctrl + -` | **Retina Zoom Out** |
-| `Ctrl + 0` | **Reset Retina Zoom (100%)** |
-| `Ctrl + Scroll Wheel` | **Smooth Retina Zooming** |
-| `Ctrl + Z` | Undo |
-| `Ctrl + Y` | Redo |
-| `Ctrl + W` / `Ctrl + Q` | Close / Quit |
+| `Ctrl + +` / `Ctrl + -` | Retina Zoom In / Out |
+| `Ctrl + 0` | Reset Retina Zoom (100%) |
+| `Ctrl + Scroll Wheel` | Smooth Real-Time Zooming |
+| `Ctrl + Q` | Quit Application |
 
 ---
 
@@ -109,4 +132,4 @@ Once installed, you can add RetinaPad directly to your taskbar/panel:
 For high-resolution monitors on Linux Mint Cinnamon:
 1. Open **System Settings -> General**.
 2. Under **Desktop Scaling**, select **Auto** or **Double (HiDPI)**.
-3. In RetinaPad, you can use `Ctrl + Mouse Wheel` or the zoom buttons on the HeaderBar to adjust text readability without blurring.
+3. In PythonPad, you can use `Ctrl + Mouse Wheel` or the zoom buttons on the HeaderBar to adjust text readability without blurring.

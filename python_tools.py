@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-RetinaPad - Python Tools Engine
-Provides native Python execution, AST syntax verification, and Pylint diagnostics.
+PythonPad - Python Tools Engine
+Provides configurable Python interpreter execution, interactive REPL shell,
+native AST syntax verification, and Pylint diagnostics.
 """
 
 import os
 import sys
+import io
 import json
+import code
 import shutil
 import tempfile
 import subprocess
@@ -29,12 +32,114 @@ class Diagnostic:
         return f"<Diagnostic [{self.severity.upper()}] L{self.line}:C{self.column} {self.code}: {self.message}>"
 
 
+class InterpreterManager:
+    """Detects and manages system base and custom Python interpreters."""
+
+    DEFAULT_INTERPRETER = sys.executable or "/usr/bin/python3"
+    _active_interpreter = None
+
+    @classmethod
+    def get_active_interpreter(cls) -> str:
+        if cls._active_interpreter and os.path.exists(cls._active_interpreter):
+            return cls._active_interpreter
+        return cls.DEFAULT_INTERPRETER
+
+    @classmethod
+    def set_active_interpreter(cls, path: str):
+        if path and os.path.exists(path):
+            cls._active_interpreter = os.path.abspath(path)
+
+    @classmethod
+    def get_interpreter_version(cls, path=None) -> str:
+        interp = path or cls.get_active_interpreter()
+        try:
+            res = subprocess.run([interp, "--version"], capture_output=True, text=True, timeout=3)
+            return res.stdout.strip() or res.stderr.strip() or "Python 3"
+        except Exception:
+            return "Python 3"
+
+    @classmethod
+    def detect_system_interpreters(cls) -> list:
+        """Scan standard Linux paths for installed Python interpreters."""
+        found = []
+        candidates = [
+            "/usr/bin/python3",
+            "/usr/bin/python3.12",
+            "/usr/bin/python3.11",
+            "/usr/bin/python3.10",
+            sys.executable,
+        ]
+        seen = set()
+        for path in candidates:
+            if path and os.path.exists(path) and os.path.isfile(path):
+                real = os.path.realpath(path)
+                if real not in seen:
+                    seen.add(real)
+                    ver = cls.get_interpreter_version(path)
+                    found.append((path, ver))
+        return found
+
+
+class InteractiveShellSession:
+    """
+    Persistent Python interactive REPL session.
+    Maintains variables, functions, and state across commands.
+    """
+
+    def __init__(self):
+        self.locals = {
+            '__name__': '__main__',
+            '__doc__': 'PythonPad Interactive Shell',
+            '__package__': None,
+        }
+        self.console = code.InteractiveConsole(self.locals)
+        self.banner = (
+            f"PythonPad Interactive Shell\n"
+            f"Interpreter: {InterpreterManager.get_active_interpreter()} ({InterpreterManager.get_interpreter_version()})\n"
+            f"Type \"help()\", \"copyright\", \"credits\" or \"license\" for more information.\n"
+        )
+        self.buffer = []
+
+    def restart(self):
+        """Reset the shell environment to a clean state."""
+        self.locals = {
+            '__name__': '__main__',
+            '__doc__': 'PythonPad Interactive Shell',
+            '__package__': None,
+        }
+        self.console = code.InteractiveConsole(self.locals)
+        self.buffer.clear()
+        return "=== Shell Restarted: Clean Global State ===\n"
+
+    def push_line(self, line: str):
+        """
+        Push a line to the console.
+        Returns (output_text, is_continuation_needed).
+        """
+        out_capture = io.StringIO()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = out_capture
+        sys.stderr = out_capture
+
+        try:
+            more = self.console.push(line)
+        except Exception:
+            self.console.showtraceback()
+            more = False
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+        return out_capture.getvalue(), more
+
+
 class PythonLinter:
     """Runs Pylint or native AST analysis on Python code."""
 
     @staticmethod
     def is_pylint_available() -> bool:
-        """Check whether pylint is installed and executable in PATH."""
+        """Check whether pylint is installed in PATH."""
         return shutil.which("pylint") is not None
 
     @classmethod
@@ -44,29 +149,27 @@ class PythonLinter:
         Returns (diagnostics_list, status_summary_str, is_pylint_used).
         """
         diagnostics = []
-        is_pylint_used = False
 
-        # 1. Native AST syntax check first (ultra-fast)
+        # 1. Native AST syntax check first
         ast_errors = cls._check_ast_syntax(content, file_path)
         if ast_errors:
             return ast_errors, "Syntax error detected in Python code.", False
 
-        # 2. If Pylint is available, run comprehensive Pylint analysis
+        # 2. Pylint if available
         if cls.is_pylint_available():
             pylint_diags = cls._run_pylint(file_path, content)
             if pylint_diags is not None:
-                is_pylint_used = True
                 diagnostics.extend(pylint_diags)
                 summary = cls._format_summary(diagnostics, pylint_used=True)
                 return diagnostics, summary, True
 
-        # 3. Fallback: Syntax OK, notify user how to enable full Pylint
+        # 3. Fallback: Syntax OK
         summary = "Native Python Syntax OK. (Install 'pylint' for deep code inspection)"
         return diagnostics, summary, False
 
     @staticmethod
     def _check_ast_syntax(content, file_path=None):
-        """Perform native Python AST and compile parse to detect syntax mistakes."""
+        """Perform native Python AST and compile parse to detect syntax errors."""
         if not content:
             return []
         try:
@@ -102,10 +205,9 @@ class PythonLinter:
         temp_file = None
         target_path = file_path
 
-        # If unsaved or unsaved buffer content is provided, write to a temp file
         if not target_path or not os.path.exists(target_path) or content:
             try:
-                fd, temp_file = tempfile.mkstemp(prefix="retinapad_lint_", suffix=".py")
+                fd, temp_file = tempfile.mkstemp(prefix="pythonpad_lint_", suffix=".py")
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content if content else "")
                 target_path = temp_file
@@ -122,13 +224,7 @@ class PythonLinter:
         ]
 
         try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False  # Pylint returns bitmask returncodes for warnings/errors
-            )
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
             stdout = proc.stdout.strip()
             if not stdout:
                 return []
@@ -136,7 +232,6 @@ class PythonLinter:
             raw_data = json.loads(stdout)
             results = []
             for item in raw_data:
-                # Severity normalization
                 raw_type = item.get("type", "convention").lower()
                 severity = "error" if raw_type in ("error", "fatal") else raw_type
 
@@ -183,16 +278,16 @@ class PythonLinter:
 
 
 class PythonRunner:
-    """Manages asynchronous execution of Python scripts with live output capture."""
+    """Manages asynchronous execution of Python scripts using the system base interpreter."""
 
     def __init__(self):
         self.process = None
         self._thread = None
         self.is_running = False
 
-    def run(self, file_path, on_output, on_finished):
+    def run(self, file_path, on_output, on_finished, script_args=None, custom_interpreter=None):
         """
-        Runs the python script in a background thread.
+        Runs the python script in a background thread using the selected interpreter.
         on_output(text: str, is_stderr: bool)
         on_finished(returncode: int)
         """
@@ -205,10 +300,12 @@ class PythonRunner:
             return False
 
         self.is_running = True
+        interpreter = custom_interpreter or InterpreterManager.get_active_interpreter()
+        args = script_args or []
 
         def _worker():
             work_dir = os.path.dirname(os.path.abspath(file_path))
-            cmd = [sys.executable, "-u", file_path]
+            cmd = [interpreter, "-u", file_path] + args
 
             try:
                 self.process = subprocess.Popen(
@@ -220,7 +317,6 @@ class PythonRunner:
                     bufsize=1
                 )
 
-                # Threads to stream stdout and stderr concurrently
                 def _stream_reader(stream, is_err):
                     try:
                         for line in iter(stream.readline, ""):

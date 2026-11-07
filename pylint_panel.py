@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-RetinaPad - Pylint Viewer & Python Console Panel
-Provides a bottom pane with diagnostics (Pylint / Syntax) and execution output.
+PythonPad - Bottom Workspace Panel
+Provides:
+  1. Interactive Python Shell (REPL with persistent session and history)
+  2. Script Runner Console (executing with system base interpreter)
+  3. Pylint & Diagnostics Viewer (error/warning inspection with click-to-jump)
 """
 
 import gi
@@ -11,11 +14,22 @@ gi.require_version('Gdk', '3.0')
 gi.require_version('Pango', '1.0')
 
 from gi.repository import Gtk, Gdk, Pango, GLib, GObject
-from python_tools import PythonLinter, PythonRunner, Diagnostic
+from python_tools import (
+    PythonLinter,
+    PythonRunner,
+    InteractiveShellSession,
+    InterpreterManager,
+    Diagnostic
+)
 
 
-class PylintPanel(Gtk.Box):
-    """Bottom docked panel with Pylint Diagnostics viewer and Python Run console."""
+class PythonPadPanel(Gtk.Box):
+    """
+    Bottom docked workspace panel housing:
+    - Interactive Python Shell
+    - Python Script Runner Console
+    - Pylint & Code Diagnostics Viewer
+    """
 
     __gsignals__ = {
         'goto-location': (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
@@ -33,9 +47,14 @@ class PylintPanel(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.editor_getter = editor_getter
         self.runner = PythonRunner()
+        self.shell_session = InteractiveShellSession()
+        self.history = []
+        self.history_idx = -1
+        self.is_continuation = False
 
-        self.set_size_request(-1, 210)
+        self.set_size_request(-1, 230)
         self._build_ui()
+        self._init_shell_banner()
 
     def _build_ui(self):
         # Header / Tab Bar
@@ -49,34 +68,45 @@ class PylintPanel(Gtk.Box):
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         Gtk.StyleContext.add_class(btn_box.get_style_context(), "linked")
 
-        self.tab_btn_lint = Gtk.RadioButton.new_with_label(None, "Pylint Diagnostics")
-        self.tab_btn_lint.set_mode(False)
-        self.tab_btn_lint.connect("toggled", lambda b: self._switch_tab(0) if b.get_active() else None)
-        btn_box.pack_start(self.tab_btn_lint, False, False, 0)
+        self.tab_btn_shell = Gtk.RadioButton.new_with_label(None, "Python Shell")
+        self.tab_btn_shell.set_mode(False)
+        self.tab_btn_shell.connect("toggled", lambda b: self._switch_tab(0) if b.get_active() else None)
+        btn_box.pack_start(self.tab_btn_shell, False, False, 0)
 
-        self.tab_btn_run = Gtk.RadioButton.new_with_label_from_widget(self.tab_btn_lint, "Python Console")
+        self.tab_btn_run = Gtk.RadioButton.new_with_label_from_widget(self.tab_btn_shell, "Script Runner")
         self.tab_btn_run.set_mode(False)
         self.tab_btn_run.connect("toggled", lambda b: self._switch_tab(1) if b.get_active() else None)
         btn_box.pack_start(self.tab_btn_run, False, False, 0)
 
+        self.tab_btn_lint = Gtk.RadioButton.new_with_label_from_widget(self.tab_btn_shell, "Pylint Diagnostics")
+        self.tab_btn_lint.set_mode(False)
+        self.tab_btn_lint.connect("toggled", lambda b: self._switch_tab(2) if b.get_active() else None)
+        btn_box.pack_start(self.tab_btn_lint, False, False, 0)
+
         tab_bar.pack_start(btn_box, False, False, 0)
 
         # Status text
-        self.lbl_status = Gtk.Label(label="Ready")
+        self.lbl_status = Gtk.Label(label="Base Interpreter: " + InterpreterManager.get_active_interpreter())
         self.lbl_status.set_xalign(0)
         self.lbl_status.set_margin_start(12)
         tab_bar.pack_start(self.lbl_status, True, True, 0)
 
-        # Action buttons
-        self.btn_action = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.BUTTON)
-        self.btn_action.set_tooltip_text("Refresh Pylint (F8)")
-        self.btn_action.connect("clicked", lambda b: self.run_lint())
+        # Controls for Shell
+        self.btn_shell_restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_shell_restart.set_tooltip_text("Restart Shell / Reset Environment (Ctrl+F6)")
+        self.btn_shell_restart.connect("clicked", lambda b: self.restart_shell())
         tab_bar.pack_end(self._create_close_btn(), False, False, 0)
-        tab_bar.pack_end(self.btn_action, False, False, 0)
+        tab_bar.pack_end(self.btn_shell_restart, False, False, 0)
 
-        # Run / Stop controls for Console
+        # Controls for Linter
+        self.btn_lint_refresh = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_lint_refresh.set_tooltip_text("Re-run Pylint Diagnostics (F8)")
+        self.btn_lint_refresh.connect("clicked", lambda b: self.run_lint())
+        tab_bar.pack_end(self.btn_lint_refresh, False, False, 0)
+
+        # Controls for Script Runner
         self.btn_run_script = Gtk.Button.new_from_icon_name("media-playback-start-symbolic", Gtk.IconSize.BUTTON)
-        self.btn_run_script.set_tooltip_text("Run Python Script (F5)")
+        self.btn_run_script.set_tooltip_text("Run Active Script (F5)")
         self.btn_run_script.connect("clicked", lambda b: self.run_script())
         tab_bar.pack_end(self.btn_run_script, False, False, 0)
 
@@ -86,22 +116,24 @@ class PylintPanel(Gtk.Box):
         self.btn_stop_script.connect("clicked", lambda b: self.runner.stop())
         tab_bar.pack_end(self.btn_stop_script, False, False, 0)
 
-        self.btn_clear_console = Gtk.Button.new_from_icon_name("edit-clear-symbolic", Gtk.IconSize.BUTTON)
-        self.btn_clear_console.set_tooltip_text("Clear Console Output")
-        self.btn_clear_console.connect("clicked", lambda b: self.clear_console())
-        tab_bar.pack_end(self.btn_clear_console, False, False, 0)
+        self.btn_clear_output = Gtk.Button.new_from_icon_name("edit-clear-symbolic", Gtk.IconSize.BUTTON)
+        self.btn_clear_output.set_tooltip_text("Clear View")
+        self.btn_clear_output.connect("clicked", lambda b: self._clear_active_view())
+        tab_bar.pack_end(self.btn_clear_output, False, False, 0)
 
         self.pack_start(tab_bar, False, False, 0)
 
-        # Notebook stack
+        # Stack container
         self.notebook = Gtk.Stack()
         self.notebook.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.notebook.set_transition_duration(100)
 
-        self._build_lint_view()
+        self._build_shell_view()
         self._build_console_view()
+        self._build_lint_view()
 
         self.pack_start(self.notebook, True, True, 0)
+        self._switch_tab(0)
 
     def _create_close_btn(self):
         btn = Gtk.Button.new_from_icon_name("window-close-symbolic", Gtk.IconSize.BUTTON)
@@ -112,31 +144,238 @@ class PylintPanel(Gtk.Box):
 
     def _switch_tab(self, index):
         if index == 0:
-            self.notebook.set_visible_child_name("lint")
-            self.btn_action.set_visible(True)
+            self.notebook.set_visible_child_name("shell")
+            self.btn_shell_restart.set_visible(True)
+            self.btn_lint_refresh.set_visible(False)
             self.btn_run_script.set_visible(False)
             self.btn_stop_script.set_visible(False)
-            self.btn_clear_console.set_visible(False)
-        else:
+            self.btn_clear_output.set_visible(True)
+            self.shell_entry.grab_focus()
+        elif index == 1:
             self.notebook.set_visible_child_name("console")
-            self.btn_action.set_visible(False)
+            self.btn_shell_restart.set_visible(False)
+            self.btn_lint_refresh.set_visible(False)
             self.btn_run_script.set_visible(True)
             self.btn_stop_script.set_visible(True)
-            self.btn_clear_console.set_visible(True)
+            self.btn_clear_output.set_visible(True)
+        else:
+            self.notebook.set_visible_child_name("lint")
+            self.btn_shell_restart.set_visible(False)
+            self.btn_lint_refresh.set_visible(True)
+            self.btn_run_script.set_visible(False)
+            self.btn_stop_script.set_visible(False)
+            self.btn_clear_output.set_visible(False)
+
+    def _clear_active_view(self):
+        active = self.notebook.get_visible_child_name()
+        if active == "shell":
+            self.shell_buffer.set_text("")
+            self._init_shell_banner()
+        elif active == "console":
+            self.console_buffer.set_text("")
 
     # --------------------------------------------------------------------------
-    # Pylint View
+    # 1. Interactive Shell View
+    # --------------------------------------------------------------------------
+    def _build_shell_view(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        # Output text view
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+
+        self.shell_buffer = Gtk.TextBuffer()
+        self.shell_view = Gtk.TextView(buffer=self.shell_buffer)
+        self.shell_view.set_editable(False)
+        self.shell_view.set_cursor_visible(False)
+        self.shell_view.set_monospace(True)
+        self.shell_view.set_left_margin(10)
+        self.shell_view.set_right_margin(10)
+        self.shell_view.set_top_margin(6)
+        self.shell_view.set_bottom_margin(6)
+
+        # Shell color tags
+        self.tag_prompt = self.shell_buffer.create_tag("prompt", foreground="#3498db", weight=Pango.Weight.BOLD)
+        self.tag_input = self.shell_buffer.create_tag("input", foreground="#2ecc71")
+        self.tag_out = self.shell_buffer.create_tag("output")
+        self.tag_err = self.shell_buffer.create_tag("error", foreground="#e74c3c")
+        self.tag_banner = self.shell_buffer.create_tag("banner", foreground="#95a5a6", style=Pango.Style.ITALIC)
+
+        scrolled.add(self.shell_view)
+        box.pack_start(scrolled, True, True, 0)
+
+        # Shell Input Bar (>>> entry)
+        entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        entry_box.set_margin_start(8)
+        entry_box.set_margin_end(8)
+        entry_box.set_margin_bottom(4)
+
+        self.lbl_prompt = Gtk.Label(label=">>> ")
+        self.lbl_prompt.get_style_context().add_class("dim-label")
+        entry_box.pack_start(self.lbl_prompt, False, False, 0)
+
+        self.shell_entry = Gtk.Entry()
+        self.shell_entry.set_placeholder_text("Type Python expression or code...")
+        self.shell_entry.connect("activate", self._on_shell_submit)
+        self.shell_entry.connect("key-press-event", self._on_shell_key_press)
+        entry_box.pack_start(self.shell_entry, True, True, 0)
+
+        box.pack_start(entry_box, False, False, 0)
+        self.notebook.add_named(box, "shell")
+
+    def _init_shell_banner(self):
+        buf = self.shell_buffer
+        end = buf.get_end_iter()
+        tag = buf.get_tag_table().lookup("banner")
+        buf.insert_with_tags(end, self.shell_session.banner + "\n", tag)
+
+    def _on_shell_submit(self, entry):
+        line = entry.get_text()
+        entry.set_text("")
+        prompt = "... " if self.is_continuation else ">>> "
+
+        # Append submitted command to buffer
+        buf = self.shell_buffer
+        end = buf.get_end_iter()
+        tag_p = buf.get_tag_table().lookup("prompt")
+        tag_i = buf.get_tag_table().lookup("input")
+        buf.insert_with_tags(end, prompt, tag_p)
+        buf.insert_with_tags(buf.get_end_iter(), line + "\n", tag_i)
+
+        if line.strip():
+            self.history.append(line)
+        self.history_idx = len(self.history)
+
+        output, more = self.shell_session.push_line(line)
+        self.is_continuation = more
+        self.lbl_prompt.set_text("... " if more else ">>> ")
+
+        if output:
+            end = buf.get_end_iter()
+            tag_o = buf.get_tag_table().lookup("output")
+            buf.insert_with_tags(end, output, tag_o)
+
+        # Scroll to bottom
+        mark = buf.create_mark(None, buf.get_end_iter(), False)
+        self.shell_view.scroll_to_mark(mark, 0.05, False, 0.0, 0.0)
+
+    def _on_shell_key_press(self, widget, event):
+        # History navigation via Up / Down arrow
+        if event.keyval == Gdk.KEY_Up:
+            if self.history and self.history_idx > 0:
+                self.history_idx -= 1
+                self.shell_entry.set_text(self.history[self.history_idx])
+                self.shell_entry.set_position(-1)
+                return True
+        elif event.keyval == Gdk.KEY_Down:
+            if self.history and self.history_idx < len(self.history) - 1:
+                self.history_idx += 1
+                self.shell_entry.set_text(self.history[self.history_idx])
+                self.shell_entry.set_position(-1)
+                return True
+            elif self.history_idx >= len(self.history) - 1:
+                self.history_idx = len(self.history)
+                self.shell_entry.set_text("")
+                return True
+        return False
+
+    def restart_shell(self):
+        msg = self.shell_session.restart()
+        self.is_continuation = False
+        self.lbl_prompt.set_text(">>> ")
+        buf = self.shell_buffer
+        end = buf.get_end_iter()
+        tag_b = buf.get_tag_table().lookup("banner")
+        buf.insert_with_tags(end, f"\n{msg}\n", tag_b)
+        self.shell_entry.grab_focus()
+
+    # --------------------------------------------------------------------------
+    # 2. Script Runner View (Base Interpreter)
+    # --------------------------------------------------------------------------
+    def _build_console_view(self):
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+
+        self.console_buffer = Gtk.TextBuffer()
+        self.console_view = Gtk.TextView(buffer=self.console_buffer)
+        self.console_view.set_editable(False)
+        self.console_view.set_cursor_visible(False)
+        self.console_view.set_monospace(True)
+        self.console_view.set_left_margin(10)
+        self.console_view.set_right_margin(10)
+        self.console_view.set_top_margin(8)
+        self.console_view.set_bottom_margin(8)
+
+        self.tag_stdout = self.console_buffer.create_tag("stdout")
+        self.tag_stderr = self.console_buffer.create_tag("stderr", foreground="#e74c3c")
+        self.tag_system = self.console_buffer.create_tag("system", foreground="#3498db", weight=Pango.Weight.BOLD)
+        self.tag_success = self.console_buffer.create_tag("success", foreground="#2ecc71", weight=Pango.Weight.BOLD)
+
+        scrolled.add(self.console_view)
+        self.notebook.add_named(scrolled, "console")
+
+    def run_script(self, args=None):
+        """Execute active file with system base interpreter."""
+        editor = self.editor_getter()
+        if not editor:
+            return
+
+        if not editor.file_path or editor.is_modified():
+            self.lbl_status.set_text("Please save file before running.")
+            return
+
+        self.tab_btn_run.set_active(True)
+        self._switch_tab(1)
+
+        interp = InterpreterManager.get_active_interpreter()
+        ver = InterpreterManager.get_interpreter_version()
+
+        self.console_buffer.set_text("")
+        self._append_console(f"▶ Running script with {interp} ({ver})\n", "system")
+        self._append_console(f"▶ File: {editor.file_path}\n" + ("-" * 60) + "\n\n", "system")
+
+        self.btn_run_script.set_sensitive(False)
+        self.btn_stop_script.set_sensitive(True)
+        self.lbl_status.set_text(f"Running script ({os.path.basename(editor.file_path)})...")
+
+        def _on_output(text, is_stderr):
+            tag = "stderr" if is_stderr else "stdout"
+            GLib.idle_add(self._append_console, text, tag)
+
+        def _on_finished(rc):
+            def _ui_finish():
+                tag = "success" if rc == 0 else "stderr"
+                self._append_console(f"\n" + ("-" * 60) + f"\n■ Process finished with exit code {rc}\n", tag)
+                self.btn_run_script.set_sensitive(True)
+                self.btn_stop_script.set_sensitive(False)
+                self.lbl_status.set_text(f"Finished (exit code {rc})")
+            GLib.idle_add(_ui_finish)
+
+        self.runner.run(editor.file_path, _on_output, _on_finished, script_args=args, custom_interpreter=interp)
+
+    def _append_console(self, text, tag_name=None):
+        buf = self.console_buffer
+        end = buf.get_end_iter()
+        if tag_name:
+            tag = buf.get_tag_table().lookup(tag_name)
+            buf.insert_with_tags(end, text, tag)
+        else:
+            buf.insert(end, text)
+
+        mark = buf.create_mark(None, buf.get_end_iter(), False)
+        self.console_view.scroll_to_mark(mark, 0.05, False, 0.0, 0.0)
+
+    # --------------------------------------------------------------------------
+    # 3. Pylint Diagnostics View
     # --------------------------------------------------------------------------
     def _build_lint_view(self):
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
-        # Model: [icon_name, severity_str, line_int, col_int, code_str, message_str]
         self.lint_store = Gtk.ListStore(str, str, int, int, str, str)
         self.tree_view = Gtk.TreeView(model=self.lint_store)
         self.tree_view.set_headers_visible(True)
 
-        # Col 1: Severity (Icon + Text)
         col_sev = Gtk.TreeViewColumn("Severity")
         icon_cell = Gtk.CellRendererPixbuf()
         text_cell = Gtk.CellRendererText()
@@ -148,32 +387,26 @@ class PylintPanel(Gtk.Box):
         col_sev.set_resizable(True)
         self.tree_view.append_column(col_sev)
 
-        # Col 2: Line
         col_line = Gtk.TreeViewColumn("Line", Gtk.CellRendererText(), text=self.COL_LINE)
         col_line.set_min_width(55)
         col_line.set_resizable(True)
         self.tree_view.append_column(col_line)
 
-        # Col 3: Column
         col_col = Gtk.TreeViewColumn("Col", Gtk.CellRendererText(), text=self.COL_COL)
         col_col.set_min_width(50)
         col_col.set_resizable(True)
         self.tree_view.append_column(col_col)
 
-        # Col 4: Code
         col_code = Gtk.TreeViewColumn("Code", Gtk.CellRendererText(), text=self.COL_CODE)
         col_code.set_min_width(70)
         col_code.set_resizable(True)
         self.tree_view.append_column(col_code)
 
-        # Col 5: Message
         col_msg = Gtk.TreeViewColumn("Message", Gtk.CellRendererText(), text=self.COL_MESSAGE)
         col_msg.set_resizable(True)
         self.tree_view.append_column(col_msg)
 
-        # Row activation (double click or Enter)
         self.tree_view.connect("row-activated", self._on_lint_row_activated)
-
         scrolled.add(self.tree_view)
         self.notebook.add_named(scrolled, "lint")
 
@@ -186,19 +419,18 @@ class PylintPanel(Gtk.Box):
             self.emit("goto-location", line, col)
 
     def run_lint(self):
-        """Executes pylint on current editor content and populates list."""
         editor = self.editor_getter()
         if not editor:
             return
 
         self.tab_btn_lint.set_active(True)
-        self._switch_tab(0)
+        self._switch_tab(2)
 
         content = editor.get_text()
         file_path = editor.file_path
 
         self.lint_store.clear()
-        self.lbl_status.set_text("Analyzing Python code...")
+        self.lbl_status.set_text("Analyzing Python code with Pylint/AST...")
 
         def _lint_async():
             diags, summary, used_pylint = PythonLinter.lint(file_path=file_path, content=content)
@@ -229,80 +461,3 @@ class PylintPanel(Gtk.Box):
                 d.code,
                 f"{d.message} ({d.symbol})" if d.symbol else d.message
             ])
-
-    # --------------------------------------------------------------------------
-    # Python Console View
-    # --------------------------------------------------------------------------
-    def _build_console_view(self):
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-
-        self.console_buffer = Gtk.TextBuffer()
-        self.console_view = Gtk.TextView(buffer=self.console_buffer)
-        self.console_view.set_editable(False)
-        self.console_view.set_cursor_visible(False)
-        self.console_view.set_monospace(True)
-        self.console_view.set_left_margin(10)
-        self.console_view.set_right_margin(10)
-        self.console_view.set_top_margin(8)
-        self.console_view.set_bottom_margin(8)
-
-        # Style tags
-        self.tag_stdout = self.console_buffer.create_tag("stdout")
-        self.tag_stderr = self.console_buffer.create_tag("stderr", foreground="#e74c3c")
-        self.tag_system = self.console_buffer.create_tag("system", foreground="#3498db", weight=Pango.Weight.BOLD)
-        self.tag_success = self.console_buffer.create_tag("success", foreground="#2ecc71", weight=Pango.Weight.BOLD)
-
-        scrolled.add(self.console_view)
-        self.notebook.add_named(scrolled, "console")
-
-    def run_script(self):
-        """Executes currently opened file in Python Console."""
-        editor = self.editor_getter()
-        if not editor:
-            return
-
-        # Ensure file is saved before running
-        if not editor.file_path or editor.is_modified():
-            self.lbl_status.set_text("Please save the file before running.")
-            return
-
-        self.tab_btn_run.set_active(True)
-        self._switch_tab(1)
-
-        self.clear_console()
-        self._append_console(f"▶ Running {editor.file_path} ...\n", "system")
-        self.btn_run_script.set_sensitive(False)
-        self.btn_stop_script.set_sensitive(True)
-        self.lbl_status.set_text("Python script is running...")
-
-        def _on_output(text, is_stderr):
-            tag = "stderr" if is_stderr else "stdout"
-            GLib.idle_add(self._append_console, text, tag)
-
-        def _on_finished(rc):
-            def _ui_finish():
-                tag = "success" if rc == 0 else "stderr"
-                self._append_console(f"\n■ Process exited with code {rc}\n", tag)
-                self.btn_run_script.set_sensitive(True)
-                self.btn_stop_script.set_sensitive(False)
-                self.lbl_status.set_text(f"Execution finished (code {rc})")
-            GLib.idle_add(_ui_finish)
-
-        self.runner.run(editor.file_path, _on_output, _on_finished)
-
-    def _append_console(self, text, tag_name=None):
-        buf = self.console_buffer
-        end = buf.get_end_iter()
-        if tag_name:
-            tag = buf.get_tag_table().lookup(tag_name)
-            buf.insert_with_tags(end, text, tag)
-        else:
-            buf.insert(end, text)
-
-        # Auto-scroll to end
-        mark = buf.create_mark(None, buf.get_end_iter(), False)
-        self.console_view.scroll_to_mark(mark, 0.05, False, 0.0, 0.0)
-
-    def clear_console(self):
-        self.console_buffer.set_text("")

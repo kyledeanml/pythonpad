@@ -257,6 +257,243 @@ class RetinaEditor(Gtk.ScrolledWindow):
         self.source_view.grab_focus()
 
     # --------------------------------------------------------------------------
+    # Advanced Code Editing Operations
+    # --------------------------------------------------------------------------
+    def toggle_comment(self):
+        """Toggle '#' comment on current line or selected block."""
+        buf = self.source_buffer
+        buf.begin_user_action()
+        try:
+            bounds = buf.get_selection_bounds()
+            if bounds:
+                start, end = bounds
+                start_l = start.get_line()
+                end_l = end.get_line()
+                if end.get_line_offset() == 0 and end_l > start_l:
+                    end_l -= 1
+            else:
+                cur = buf.get_iter_at_mark(buf.get_insert())
+                start_l = end_l = cur.get_line()
+
+            # Determine whether all selected lines are commented
+            all_commented = True
+            lines_iters = []
+            for l in range(start_l, end_l + 1):
+                it = buf.get_iter_at_line(l)
+                eol = it.copy()
+                eol.forward_to_line_end()
+                line_str = buf.get_text(it, eol, True).strip()
+                if line_str and not line_str.startswith("#"):
+                    all_commented = False
+                lines_iters.append(l)
+
+            # Apply comment or uncomment
+            for l in lines_iters:
+                it = buf.get_iter_at_line(l)
+                eol = it.copy()
+                eol.forward_to_line_end()
+                line_str = buf.get_text(it, eol, True)
+
+                if all_commented:
+                    # Remove comment
+                    if "# " in line_str:
+                        new_line = line_str.replace("# ", "", 1)
+                    elif "#" in line_str:
+                        new_line = line_str.replace("#", "", 1)
+                    else:
+                        new_line = line_str
+                    buf.delete(it, eol)
+                    it = buf.get_iter_at_line(l)
+                    buf.insert(it, new_line)
+                else:
+                    # Add comment
+                    buf.insert(it, "# ")
+        finally:
+            buf.end_user_action()
+
+    def duplicate_line(self):
+        """Duplicate current line or selected text (Ctrl+D)."""
+        buf = self.source_buffer
+        buf.begin_user_action()
+        try:
+            bounds = buf.get_selection_bounds()
+            if bounds:
+                start, end = bounds
+                text = buf.get_text(start, end, True)
+                buf.insert(end, text)
+            else:
+                cur = buf.get_iter_at_mark(buf.get_insert())
+                l = cur.get_line()
+                it = buf.get_iter_at_line(l)
+                eol = it.copy()
+                eol.forward_to_line_end()
+                line_text = buf.get_text(it, eol, True)
+                buf.insert(eol, "\n" + line_text)
+        finally:
+            buf.end_user_action()
+
+    def delete_line(self):
+        """Delete entire current line (Ctrl+Shift+K)."""
+        buf = self.source_buffer
+        buf.begin_user_action()
+        try:
+            cur = buf.get_iter_at_mark(buf.get_insert())
+            l = cur.get_line()
+            it = buf.get_iter_at_line(l)
+            eol = it.copy()
+            if not eol.forward_line():
+                eol.forward_to_line_end()
+            buf.delete(it, eol)
+        finally:
+            buf.end_user_action()
+
+    def move_line_up(self):
+        """Move active line up by one line (Alt+Up)."""
+        buf = self.source_buffer
+        cur = buf.get_iter_at_mark(buf.get_insert())
+        l = cur.get_line()
+        if l == 0:
+            return
+        buf.begin_user_action()
+        try:
+            it = buf.get_iter_at_line(l)
+            eol = it.copy()
+            eol.forward_to_line_end()
+            cur_line = buf.get_text(it, eol, True)
+
+            prev_it = buf.get_iter_at_line(l - 1)
+            prev_eol = prev_it.copy()
+            prev_eol.forward_to_line_end()
+            prev_line = buf.get_text(prev_it, prev_eol, True)
+
+            # Swap lines
+            buf.delete(it, eol)
+            it = buf.get_iter_at_line(l)
+            buf.insert(it, prev_line)
+
+            prev_it = buf.get_iter_at_line(l - 1)
+            prev_eol = prev_it.copy()
+            prev_eol.forward_to_line_end()
+            buf.delete(prev_it, prev_eol)
+            prev_it = buf.get_iter_at_line(l - 1)
+            buf.insert(prev_it, cur_line)
+
+            self.goto_line(l)
+        finally:
+            buf.end_user_action()
+
+    def move_line_down(self):
+        """Move active line down by one line (Alt+Down)."""
+        buf = self.source_buffer
+        cur = buf.get_iter_at_mark(buf.get_insert())
+        l = cur.get_line()
+        if l >= buf.get_line_count() - 1:
+            return
+        buf.begin_user_action()
+        try:
+            it = buf.get_iter_at_line(l)
+            eol = it.copy()
+            eol.forward_to_line_end()
+            cur_line = buf.get_text(it, eol, True)
+
+            next_it = buf.get_iter_at_line(l + 1)
+            next_eol = next_it.copy()
+            next_eol.forward_to_line_end()
+            next_line = buf.get_text(next_it, next_eol, True)
+
+            buf.delete(next_it, next_eol)
+            next_it = buf.get_iter_at_line(l + 1)
+            buf.insert(next_it, cur_line)
+
+            it = buf.get_iter_at_line(l)
+            eol = it.copy()
+            eol.forward_to_line_end()
+            buf.delete(it, eol)
+            it = buf.get_iter_at_line(l)
+            buf.insert(it, next_line)
+
+            self.goto_line(l + 2)
+        finally:
+            buf.end_user_action()
+
+    def join_lines(self):
+        """Join current line with the next line (Ctrl+J)."""
+        buf = self.source_buffer
+        cur = buf.get_iter_at_mark(buf.get_insert())
+        l = cur.get_line()
+        if l >= buf.get_line_count() - 1:
+            return
+        buf.begin_user_action()
+        try:
+            it = buf.get_iter_at_line(l)
+            it.forward_to_line_end()
+            next_it = buf.get_iter_at_line(l + 1)
+            # Find first non-whitespace on next line
+            while not next_it.ends_line() and next_it.get_char() in (' ', '\t'):
+                next_it.forward_char()
+            buf.delete(it, next_it)
+            buf.insert(it, " ")
+        finally:
+            buf.end_user_action()
+
+    def convert_case(self, upper: bool = True):
+        """Convert selected text to UPPERCASE or lowercase (Ctrl+Shift+U / Ctrl+U)."""
+        buf = self.source_buffer
+        bounds = buf.get_selection_bounds()
+        if not bounds:
+            return
+        buf.begin_user_action()
+        try:
+            start, end = bounds
+            text = buf.get_text(start, end, True)
+            new_text = text.upper() if upper else text.lower()
+            buf.delete(start, end)
+            buf.insert_at_cursor(new_text)
+        finally:
+            buf.end_user_action()
+
+    def indent_block(self, forward: bool = True):
+        """Indent or unindent current line or selected block by 4 spaces."""
+        buf = self.source_buffer
+        buf.begin_user_action()
+        try:
+            bounds = buf.get_selection_bounds()
+            if bounds:
+                start, end = bounds
+                start_l = start.get_line()
+                end_l = end.get_line()
+                if end.get_line_offset() == 0 and end_l > start_l:
+                    end_l -= 1
+            else:
+                cur = buf.get_iter_at_mark(buf.get_insert())
+                start_l = end_l = cur.get_line()
+
+            for l in range(start_l, end_l + 1):
+                it = buf.get_iter_at_line(l)
+                if forward:
+                    buf.insert(it, "    ")
+                else:
+                    eol = it.copy()
+                    eol.forward_to_line_end()
+                    line_str = buf.get_text(it, eol, True)
+                    if line_str.startswith("    "):
+                        del_end = it.copy()
+                        del_end.forward_chars(4)
+                        buf.delete(it, del_end)
+                    elif line_str.startswith("\t"):
+                        del_end = it.copy()
+                        del_end.forward_chars(1)
+                        buf.delete(it, del_end)
+                    else:
+                        spaces = len(line_str) - len(line_str.lstrip(" "))
+                        if spaces > 0:
+                            del_end = it.copy()
+                            del_end.forward_chars(spaces)
+                            buf.delete(it, del_end)
+        finally:
+            buf.end_user_action()
+
+    # --------------------------------------------------------------------------
     # Document Stats
     # --------------------------------------------------------------------------
     def get_cursor_position(self):
