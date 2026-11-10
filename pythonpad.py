@@ -73,6 +73,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.connect("delete-event", self._on_delete_event)
 
         # Open initial files, directories, or blank tab
+        self._has_explicit_project = False
         dir_to_open = None
         files_to_open = []
         if initial_files:
@@ -97,7 +98,16 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         if not self.project_sidebar.get_project_root() and self._session_state.get("last_project"):
             last_p = self._session_state.get("last_project")
             if os.path.isdir(last_p):
+                self._has_explicit_project = True
                 self.project_sidebar.set_project_root(last_p)
+
+        # Fallback to current working directory if launched from a folder or repository
+        if not self.project_sidebar.get_project_root():
+            cwd = os.getcwd()
+            if cwd and os.path.isdir(cwd) and cwd != os.path.expanduser("~") and cwd != "/":
+                self.project_sidebar.set_project_root(cwd)
+            else:
+                self.project_sidebar.refresh()
 
         if self.notebook_tabs.get_n_pages() == 0:
             self.new_tab()
@@ -646,7 +656,6 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         # Project File Structure Sidebar
         self.project_sidebar = ProjectSidebar()
-        self.project_sidebar.set_no_show_all(True)
         self.project_sidebar.get_active_file_callback = self._get_current_file_path
         self.project_sidebar.connect("file-activated", lambda sb, path: self.open_file_from_tree(path))
         self.project_sidebar.connect("file-renamed", lambda sb, old_p, new_p: self._on_tree_file_renamed(old_p, new_p))
@@ -737,6 +746,13 @@ class PythonPadWindow(Gtk.ApplicationWindow):
                         self._update_tab_label(first_ed)
                         self.update_title()
                         self._schedule_stats_update(first_ed, immediate=True)
+                        if hasattr(self, 'project_sidebar'):
+                            if not getattr(self, '_has_explicit_project', False) or not self.project_sidebar.get_project_root():
+                                p_dir = os.path.dirname(os.path.abspath(first_ed.file_path))
+                                if os.path.isdir(p_dir):
+                                    self.project_sidebar.set_project_root(p_dir)
+                            if self.project_sidebar.get_project_root():
+                                self.project_sidebar.highlight_file(first_ed.file_path)
                         return first_ed
                     except Exception as e:
                         self._show_error(f"Could not open file:\n{e}")
@@ -780,6 +796,15 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.search_bar.set_editor(editor)
         self.update_title()
         self._schedule_stats_update(editor, immediate=True)
+
+        if editor and editor.file_path and hasattr(self, 'project_sidebar'):
+            if not getattr(self, '_has_explicit_project', False) or not self.project_sidebar.get_project_root():
+                p_dir = os.path.dirname(os.path.abspath(editor.file_path))
+                if os.path.isdir(p_dir):
+                    self.project_sidebar.set_project_root(p_dir)
+            if self.project_sidebar.get_project_root():
+                self.project_sidebar.highlight_file(editor.file_path)
+
         return editor
 
     def get_current_editor(self):
@@ -1220,12 +1245,14 @@ class PythonPadWindow(Gtk.ApplicationWindow):
     def open_project_folder(self, folder_path: str):
         """Set project root and ensure the project tree sidebar is visible."""
         if folder_path and os.path.isdir(folder_path):
+            self._has_explicit_project = True
             self.project_sidebar.set_project_root(folder_path)
             self.toggle_project_sidebar(force_state=True)
             self.update_title()
             self._save_session_state()
 
     def _on_project_changed(self, root_path: str):
+        self._has_explicit_project = True
         self.update_title()
         self._save_session_state()
 
@@ -1269,6 +1296,10 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             path = dialog.get_filename()
             if path:
                 self.new_tab(path)
+                if hasattr(self, 'project_sidebar') and not self.project_sidebar.get_project_root():
+                    parent_dir = os.path.dirname(os.path.abspath(path))
+                    if os.path.isdir(parent_dir):
+                        self.project_sidebar.set_project_root(parent_dir)
         dialog.destroy()
 
     def on_save(self, target_editor=None):

@@ -392,6 +392,26 @@ class TestProjectSidebar(unittest.TestCase):
         finally:
             win.destroy()
 
+    def test_project_sidebar_no_blank_state_and_auto_root(self):
+        gi.require_version('Gdk', '3.0')
+        from gi.repository import Gdk
+        if Gdk.Display.get_default() is None:
+            self.skipTest("Requires active X11/Wayland display connection for GUI verification")
+
+        from pythonpad import PythonPadWindow
+        win = PythonPadWindow(app=None)
+        try:
+            # 1. Sidebar should not be blank: scrolled_tree must be visible
+            self.assertTrue(win.project_sidebar.scrolled_tree.get_visible())
+            self.assertGreater(len(win.project_sidebar.store), 0)
+
+            # 2. When opening a script, project root automatically sets to parent folder
+            test_file = os.path.join(self.tmp_dir, "src", "main.py")
+            win.new_tab(test_file)
+            self.assertEqual(win.project_sidebar.get_project_root(), os.path.dirname(test_file))
+        finally:
+            win.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

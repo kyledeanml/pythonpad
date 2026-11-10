@@ -92,7 +92,7 @@ class ProjectSidebar(Gtk.Box):
         self.header_bar.set_margin_top(6)
         self.header_bar.set_margin_bottom(6)
 
-        # Title: Folder icon + Project folder name
+        # Title: Folder icon + Project folder name (clickable to open folder)
         title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         icon = Gtk.Image.new_from_icon_name("folder-symbolic", Gtk.IconSize.MENU)
         title_box.pack_start(icon, False, False, 0)
@@ -102,10 +102,22 @@ class ProjectSidebar(Gtk.Box):
         self.lbl_project.set_ellipsize(Pango.EllipsizeMode.END)
         Gtk.StyleContext.add_class(self.lbl_project.get_style_context(), "sidebar-title")
         title_box.pack_start(self.lbl_project, True, True, 0)
-        self.header_bar.pack_start(title_box, True, True, 0)
+
+        ev_title = Gtk.EventBox()
+        ev_title.add(title_box)
+        ev_title.connect("button-press-event", lambda w, e: self.on_open_folder_dialog())
+        ev_title.set_tooltip_text("Click to open or switch project folder")
+        self.header_bar.pack_start(ev_title, True, True, 0)
 
         # Action Button Box (linked)
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=1)
+
+        # 0. Open Project Folder
+        self.btn_open_folder = Gtk.Button.new_from_icon_name("folder-open-symbolic", Gtk.IconSize.MENU)
+        self.btn_open_folder.set_relief(Gtk.ReliefStyle.NONE)
+        self.btn_open_folder.set_tooltip_text("Open Project Folder...")
+        self.btn_open_folder.connect("clicked", lambda b: self.on_open_folder_dialog())
+        actions_box.pack_start(self.btn_open_folder, False, False, 0)
 
         # 1. New File in Project
         self.btn_new_file = Gtk.Button.new_from_icon_name("document-new-symbolic", Gtk.IconSize.MENU)
@@ -149,13 +161,10 @@ class ProjectSidebar(Gtk.Box):
         self.pack_start(sep, False, False, 0)
 
     # --------------------------------------------------------------------------
-    # Tree Area & Empty State
+    # Tree Area
     # --------------------------------------------------------------------------
     def _build_tree_area(self):
-        self.stack = Gtk.Stack()
-        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-
-        # 1. Tree View in ScrolledWindow
+        # Tree View in ScrolledWindow (Directly packed, always rendered & visible)
         self.scrolled_tree = Gtk.ScrolledWindow()
         self.scrolled_tree.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
@@ -189,42 +198,7 @@ class ProjectSidebar(Gtk.Box):
         self.tree_view.connect("button-press-event", self._on_tree_button_press)
 
         self.scrolled_tree.add(self.tree_view)
-        self.stack.add_named(self.scrolled_tree, "tree")
-
-        # 2. Empty State View
-        empty_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        empty_box.set_valign(Gtk.Align.CENTER)
-        empty_box.set_halign(Gtk.Align.CENTER)
-        empty_box.set_margin_start(16)
-        empty_box.set_margin_end(16)
-
-        empty_icon = Gtk.Image.new_from_icon_name("folder-open-symbolic", Gtk.IconSize.DIALOG)
-        empty_icon.set_opacity(0.6)
-        empty_box.pack_start(empty_icon, False, False, 4)
-
-        lbl_no_proj = Gtk.Label()
-        lbl_no_proj.set_markup("<b>No Project Open</b>")
-        lbl_no_proj.set_opacity(0.85)
-        empty_box.pack_start(lbl_no_proj, False, False, 0)
-
-        lbl_desc = Gtk.Label(label="Open a project directory to browse files, modules, and structure.")
-        lbl_desc.set_line_wrap(True)
-        lbl_desc.set_justify(Gtk.Justification.CENTER)
-        lbl_desc.set_opacity(0.6)
-        lbl_desc.set_max_width_chars(24)
-        empty_box.pack_start(lbl_desc, False, False, 2)
-
-        btn_open = Gtk.Button(label="Open Folder...")
-        btn_open.set_image(Gtk.Image.new_from_icon_name("folder-open-symbolic", Gtk.IconSize.BUTTON))
-        btn_open.connect("clicked", lambda b: self.on_open_folder_dialog())
-        empty_box.pack_start(btn_open, False, False, 4)
-
-        self.btn_open_current = Gtk.Button(label="Open Current Script's Folder")
-        self.btn_open_current.connect("clicked", lambda b: self._on_open_active_file_folder())
-        empty_box.pack_start(self.btn_open_current, False, False, 2)
-
-        self.stack.add_named(empty_box, "empty")
-        self.pack_start(self.stack, True, True, 0)
+        self.pack_start(self.scrolled_tree, True, True, 0)
 
     # --------------------------------------------------------------------------
     # Project Root Management
@@ -243,7 +217,6 @@ class ProjectSidebar(Gtk.Box):
         self.lbl_project.set_tooltip_text(abs_root)
 
         self.refresh()
-        self.stack.set_visible_child_name("tree")
         self.emit("project-changed", abs_root)
 
     def get_project_root(self) -> Optional[str]:
@@ -251,10 +224,29 @@ class ProjectSidebar(Gtk.Box):
 
     def _show_empty_state(self):
         self.project_root = None
-        self.lbl_project.set_text("PROJECT")
-        self.lbl_project.set_tooltip_text("No project folder open")
+        self.lbl_project.set_text("NO PROJECT")
+        self.lbl_project.set_tooltip_text("Click to open or choose a project folder")
         self.store.clear()
-        self.stack.set_visible_child_name("empty")
+        # Add prominent actionable items directly in the tree so user never sees a blank space
+        self.store.append(None, [
+            "folder-open-symbolic",
+            "Open Project Folder...",
+            "__ACTION_OPEN_FOLDER__",
+            False,
+            True
+        ])
+        if self.get_active_file_callback:
+            active_f = self.get_active_file_callback()
+            if active_f and os.path.exists(active_f):
+                parent_dir = os.path.dirname(os.path.abspath(active_f))
+                base_p = os.path.basename(parent_dir) or parent_dir
+                self.store.append(None, [
+                    "folder-symbolic",
+                    f"Open Current File Folder ({base_p})",
+                    f"__ACTION_OPEN_PARENT__{parent_dir}",
+                    False,
+                    True
+                ])
 
     def refresh(self):
         """Rescan project directory while preserving user's expanded folder state."""
@@ -388,6 +380,15 @@ class ProjectSidebar(Gtk.Box):
         tree_iter = model.get_iter(path)
         is_dir = model.get_value(tree_iter, self.COL_IS_DIR)
         full_path = model.get_value(tree_iter, self.COL_PATH)
+
+        if full_path == "__ACTION_OPEN_FOLDER__":
+            self.on_open_folder_dialog()
+            return
+        if full_path and str(full_path).startswith("__ACTION_OPEN_PARENT__"):
+            parent_target = str(full_path).replace("__ACTION_OPEN_PARENT__", "")
+            if os.path.isdir(parent_target):
+                self.set_project_root(parent_target)
+            return
 
         if is_dir:
             if tree_view.row_expanded(path):
