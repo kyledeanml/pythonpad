@@ -17,6 +17,13 @@ A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic 
 - **Interpreter Selector**: Switch seamlessly between system base Python, specific versions (`python3.12`), or virtual environments (*Menu -> Python Execution -> Select Python Interpreter*).
 - **Module Syntax Verification (`Alt + X`)**: Instant syntax check using Python's built-in AST parser without running the script.
 
+### Project File Structure Sidebar & Workspace Mode
+- **Left-Hand Project Tree**: Full hierarchical file and folder view on the left side of the UI, providing traditional IDE project navigation.
+- **One-Click Sidebar Toggle (`Ctrl + B` / `F9`)**: Toggle the sidebar on or off with a dedicated HeaderBar button or keyboard shortcut, allowing seamless switching between full multi-file project workflows and distraction-free, full-width editing for one-off scripts.
+- **Dynamic Lazy Loading**: Subdirectories expand and collapse smoothly on demand, ensuring fast responsiveness even in large repositories.
+- **File & Folder Management**: Create new files or folders, rename, delete, copy paths, or reveal in your system file manager directly from right-click context menus.
+- **Smart Tab Integration**: Activating files in the tree opens them in editor tabs or focuses existing tabs without duplicates; saving files or switching tabs highlights the file in the project tree.
+
 ### Advanced Code Editing & Multi-Tab Interface
 - **Multi-Tab Editing**: Work on multiple files simultaneously with individual tab modified indicators and close buttons (`Ctrl + T` / `Ctrl + N` new tab, `Ctrl + W` close tab).
 - **Toggle Comments (`Ctrl + /`)**: Comment or uncomment current lines or selections with `#`.
@@ -123,6 +130,8 @@ Once installed, you can add PythonPad directly to your taskbar/panel:
 | `Ctrl + T` / `Ctrl + N` | **New Tab** |
 | `Ctrl + W` | **Close Current Tab** |
 | `Ctrl + PageUp` / `PageDown` | **Switch Tabs** |
+| `Ctrl + B` / `F9` | **Toggle Project Sidebar** |
+| `Ctrl + Shift + O` | **Open Project Folder** |
 | `Ctrl + O` | Open File |
 | `Ctrl + S` / `Ctrl + Shift + S` | Save / Save As |
 | `Ctrl + F` / `Ctrl + H` | Find / Replace Bar |

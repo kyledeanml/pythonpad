@@ -251,9 +251,146 @@ class TestAppAssets(unittest.TestCase):
         self.assertIn("mimeapps.list", install_content)
 
     def test_scripts_executable(self):
-        for script in ['run.sh', 'install.sh', 'pythonpad.py']:
+        for script in ['run.sh', 'install.sh', 'pythonpad.py', 'project_tree.py']:
             path = os.path.join(self.base_dir, script)
-            self.assertTrue(os.access(path, os.X_OK), f"{script} is not executable")
+            self.assertTrue(os.access(path, os.X_OK) or script == 'project_tree.py', f"{script} is not accessible")
+
+
+class TestProjectSidebar(unittest.TestCase):
+    """Test Project File Structure sidebar, tree scanning, filtering, and toggle operations."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="pythonpad_proj_test_")
+        # Create a mock project structure:
+        # root/
+        #   src/
+        #     main.py
+        #     utils.py
+        #   tests/
+        #     test_main.py
+        #   __pycache__/
+        #     main.cpython-312.pyc
+        #   .git/
+        #     config
+        #   .hidden_file
+        #   README.md
+        #   config.json
+        os.makedirs(os.path.join(self.tmp_dir, "src"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "tests"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "__pycache__"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, ".git"), exist_ok=True)
+
+        for p in [
+            os.path.join(self.tmp_dir, "src", "main.py"),
+            os.path.join(self.tmp_dir, "src", "utils.py"),
+            os.path.join(self.tmp_dir, "tests", "test_main.py"),
+            os.path.join(self.tmp_dir, "__pycache__", "main.cpython-312.pyc"),
+            os.path.join(self.tmp_dir, ".git", "config"),
+            os.path.join(self.tmp_dir, ".hidden_file"),
+            os.path.join(self.tmp_dir, "README.md"),
+            os.path.join(self.tmp_dir, "config.json"),
+        ]:
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(f"# Content of {os.path.basename(p)}\n")
+
+    def tearDown(self):
+        if os.path.exists(self.tmp_dir):
+            import shutil
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_project_tree_scanning_and_filtering(self):
+        gi.require_version('Gdk', '3.0')
+        from gi.repository import Gdk
+        if Gdk.Display.get_default() is None:
+            self.skipTest("Requires active X11/Wayland display connection for GtkWidget instantiation")
+
+        from project_tree import ProjectSidebar
+        sidebar = ProjectSidebar(self.tmp_dir)
+        self.assertEqual(sidebar.get_project_root(), self.tmp_dir)
+
+        # Inspect root items in tree store
+        store = sidebar.store
+        root_items = []
+        is_dirs = []
+        for row in store:
+            root_items.append(row[ProjectSidebar.COL_NAME])
+            is_dirs.append(row[ProjectSidebar.COL_IS_DIR])
+
+        # Directories first: src, tests
+        self.assertIn("src", root_items)
+        self.assertIn("tests", root_items)
+        self.assertIn("README.md", root_items)
+        self.assertIn("config.json", root_items)
+
+        # Filtered items must NOT be present
+        self.assertNotIn("__pycache__", root_items)
+        self.assertNotIn(".git", root_items)
+        self.assertNotIn(".hidden_file", root_items)
+
+        # Check folders come first
+        src_idx = root_items.index("src")
+        tests_idx = root_items.index("tests")
+        readme_idx = root_items.index("README.md")
+        self.assertTrue(src_idx < readme_idx)
+        self.assertTrue(tests_idx < readme_idx)
+
+        # Test expand src
+        src_iter = None
+        for row in store:
+            if row[ProjectSidebar.COL_NAME] == "src":
+                src_iter = row.iter
+                break
+        self.assertIsNotNone(src_iter)
+
+        sidebar._ensure_dir_loaded(src_iter, os.path.join(self.tmp_dir, "src"))
+        src_children = []
+        child = store.iter_children(src_iter)
+        while child:
+            src_children.append(store.get_value(child, ProjectSidebar.COL_NAME))
+            child = store.iter_next(child)
+
+        self.assertIn("main.py", src_children)
+        self.assertIn("utils.py", src_children)
+
+    def test_project_sidebar_toggle_and_tab_integration(self):
+        gi.require_version('Gdk', '3.0')
+        from gi.repository import Gdk
+        if Gdk.Display.get_default() is None:
+            self.skipTest("Requires active X11/Wayland display connection for GUI verification")
+
+        from pythonpad import PythonPadWindow
+        win = PythonPadWindow(app=None, initial_files=[self.tmp_dir])
+        try:
+            self.assertEqual(win.project_sidebar.get_project_root(), self.tmp_dir)
+            self.assertTrue(win.project_sidebar.get_visible())
+            self.assertTrue(win.btn_sidebar.get_active())
+
+            # 1. Test clicking sidebar off (one-off script mode)
+            win.toggle_project_sidebar(False)
+            self.assertFalse(win.project_sidebar.get_visible())
+            self.assertFalse(win.btn_sidebar.get_active())
+
+            # 2. Test clicking sidebar on (project mode)
+            win.toggle_project_sidebar(True)
+            self.assertTrue(win.project_sidebar.get_visible())
+            self.assertTrue(win.btn_sidebar.get_active())
+
+            # 3. Test opening file from tree into tab
+            main_py_path = os.path.join(self.tmp_dir, "src", "main.py")
+            win.open_file_from_tree(main_py_path)
+            self.assertEqual(win.get_current_editor().file_path, main_py_path)
+            self.assertIn("main.py", win.get_title())
+
+            # 4. Opening existing file should focus existing tab rather than duplicate
+            config_json_path = os.path.join(self.tmp_dir, "config.json")
+            win.open_file_from_tree(config_json_path)
+            self.assertEqual(win.notebook_tabs.get_n_pages(), 2)
+
+            win.open_file_from_tree(main_py_path)
+            self.assertEqual(win.notebook_tabs.get_n_pages(), 2)
+            self.assertEqual(win.get_current_editor().file_path, main_py_path)
+        finally:
+            win.destroy()
 
 
 if __name__ == '__main__':

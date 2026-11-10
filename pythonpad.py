@@ -9,6 +9,7 @@ Designed for Linux Mint Cinnamon.
 import sys
 import os
 import shlex
+from typing import Optional
 
 sys.dont_write_bytecode = True
 import gi
@@ -24,19 +25,21 @@ from editor import RetinaEditor
 from search_bar import SearchBar
 from pylint_panel import PythonPadPanel
 from python_tools import InterpreterManager, PythonLinter
+from project_tree import ProjectSidebar
 
 
 class PythonPadWindow(Gtk.ApplicationWindow):
     """Main application window for PythonPad."""
 
     APP_NAME = "PythonPad"
-    APP_VERSION = "2.1"
+    APP_VERSION = "2.2"
 
     def __init__(self, app, initial_files=None):
         super().__init__(application=app, title=self.APP_NAME)
-        self.set_default_size(1050, 720)
+        self.set_default_size(1080, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
         self._stats_timeout_id = None
+        self._load_session_state()
 
         # Set application & window icon for Cinnamon panel, alt-tab, and taskbar
         self.set_wmclass("pythonpad", "PythonPad")
@@ -69,15 +72,79 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         self.connect("delete-event", self._on_delete_event)
 
-        # Open initial files or blank tab
+        # Open initial files, directories, or blank tab
+        dir_to_open = None
+        files_to_open = []
         if initial_files:
-            for f in initial_files:
-                self.new_tab(f)
+            for item in initial_files:
+                abs_i = os.path.abspath(os.path.expanduser(item))
+                if os.path.isdir(abs_i):
+                    dir_to_open = abs_i
+                else:
+                    files_to_open.append(abs_i)
+
+        if dir_to_open:
+            self.open_project_folder(dir_to_open)
+
+        for f in files_to_open:
+            self.new_tab(f)
+            if not dir_to_open and not self.project_sidebar.get_project_root():
+                parent_dir = os.path.dirname(f)
+                if os.path.isdir(parent_dir):
+                    self.project_sidebar.set_project_root(parent_dir)
+
+        # If no project specified from arguments, try restoring last project
+        if not self.project_sidebar.get_project_root() and self._session_state.get("last_project"):
+            last_p = self._session_state.get("last_project")
+            if os.path.isdir(last_p):
+                self.project_sidebar.set_project_root(last_p)
+
         if self.notebook_tabs.get_n_pages() == 0:
             self.new_tab()
 
         self.show_all()
         self.search_bar.set_reveal_child(False)
+
+        # Apply saved or requested sidebar visibility
+        initial_sidebar_vis = self._session_state.get("sidebar_visible", True)
+        self.toggle_project_sidebar(initial_sidebar_vis)
+
+    def _get_config_dir(self) -> str:
+        d = os.path.expanduser("~/.config/pythonpad")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _load_session_state(self):
+        path = os.path.join(self._get_config_dir(), "session.json")
+        self._session_state = {
+            "sidebar_visible": True,
+            "sidebar_position": 240,
+            "last_project": None
+        }
+        if os.path.isfile(path):
+            try:
+                import json
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        self._session_state.update(data)
+            except Exception:
+                pass
+        self._saved_sidebar_pos = self._session_state.get("sidebar_position", 240)
+
+    def _save_session_state(self):
+        path = os.path.join(self._get_config_dir(), "session.json")
+        try:
+            import json
+            state = {
+                "sidebar_visible": self.project_sidebar.get_visible() if hasattr(self, 'project_sidebar') else True,
+                "sidebar_position": max(150, self.hpaned.get_position()) if hasattr(self, 'hpaned') and self.hpaned.get_position() > 50 else getattr(self, '_saved_sidebar_pos', 240),
+                "last_project": self.project_sidebar.get_project_root() if hasattr(self, 'project_sidebar') else None
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+        except Exception:
+            pass
 
     def _apply_dark_neon_theme(self):
         """Apply sleek dark mode CSS with white text and neon blue accents across the UI."""
@@ -185,13 +252,28 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         paned > separator {
             background-color: #070a14;
-            border-top: 1px solid rgba(0, 240, 255, 0.3);
-            border-bottom: 1px solid rgba(0, 240, 255, 0.3);
-            min-height: 6px;
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            min-height: 4px;
+            min-width: 4px;
         }
         paned > separator:hover {
             background-color: #00f0ff;
             box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        }
+
+        .sidebar-box {
+            background-color: #080c16;
+            border-right: 1px solid rgba(0, 240, 255, 0.25);
+        }
+        .sidebar-header {
+            background-color: #0d1322;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        }
+        .sidebar-title {
+            color: #00f0ff;
+            font-size: 85%;
+            font-weight: bold;
+            letter-spacing: 0.5px;
         }
 
         .statusbar, #statusbar {
@@ -306,9 +388,16 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.header.set_subtitle("Python Development Environment")
         self.set_titlebar(self.header)
 
-        # File actions: New, Open, Save
+        # File & Workspace actions: Sidebar Toggle, New, Open, Save
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         Gtk.StyleContext.add_class(btn_box.get_style_context(), "linked")
+
+        self.btn_sidebar = Gtk.ToggleButton()
+        self.btn_sidebar.set_image(Gtk.Image.new_from_icon_name("folder-symbolic", Gtk.IconSize.BUTTON))
+        self.btn_sidebar.set_tooltip_text("Toggle Project Sidebar (Ctrl+B or F9)")
+        self.btn_sidebar.set_active(True)
+        self.btn_sidebar.connect("toggled", self._on_btn_sidebar_toggled)
+        btn_box.pack_start(self.btn_sidebar, False, False, 0)
 
         self.btn_new = Gtk.Button.new_from_icon_name("document-new-symbolic", Gtk.IconSize.BUTTON)
         self.btn_new.set_tooltip_text("New Document (Ctrl+N or Ctrl+T)")
@@ -396,7 +485,11 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
         menu = Gtk.Menu()
 
-        # File
+        # File & Workspace
+        item_open_folder = Gtk.MenuItem(label="Open Project Folder... (Ctrl+Shift+O)")
+        item_open_folder.connect("activate", lambda w: self.on_open_folder())
+        menu.append(item_open_folder)
+
         item_save_as = Gtk.MenuItem(label="Save As... (Ctrl+Shift+S)")
         item_save_as.connect("activate", lambda w: self.on_save_as())
         menu.append(item_save_as)
@@ -490,6 +583,12 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.menu_wrap.connect("toggled", lambda w: self._set_all_word_wrap(w.get_active()))
         menu.append(self.menu_wrap)
 
+        # Project Sidebar
+        self.menu_sidebar = Gtk.CheckMenuItem(label="Project Sidebar (Ctrl+B)")
+        self.menu_sidebar.set_active(True)
+        self.menu_sidebar.connect("toggled", lambda w: self.toggle_project_sidebar(w.get_active()))
+        menu.append(self.menu_sidebar)
+
         # Font Selection
         item_font = Gtk.MenuItem(label="Font Selection...")
         item_font.connect("activate", lambda w: self.on_choose_font())
@@ -541,14 +640,30 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.search_bar = SearchBar(None)
         self.vbox.pack_start(self.search_bar, False, False, 0)
 
+        # Horizontal Paned: Left = Project Sidebar, Right = Editor Tabs + Bottom Panel
+        self.hpaned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._saved_sidebar_pos = getattr(self, "_saved_sidebar_pos", 240) or 240
+
+        # Project File Structure Sidebar
+        self.project_sidebar = ProjectSidebar()
+        self.project_sidebar.set_no_show_all(True)
+        self.project_sidebar.get_active_file_callback = self._get_current_file_path
+        self.project_sidebar.connect("file-activated", lambda sb, path: self.open_file_from_tree(path))
+        self.project_sidebar.connect("file-renamed", lambda sb, old_p, new_p: self._on_tree_file_renamed(old_p, new_p))
+        self.project_sidebar.connect("file-deleted", lambda sb, path: self._on_tree_file_deleted(path))
+        self.project_sidebar.connect("project-changed", lambda sb, path: self._on_project_changed(path))
+        self.project_sidebar.connect("close-requested", lambda sb: self.toggle_project_sidebar(force_state=False))
+        self.hpaned.pack1(self.project_sidebar, resize=False, shrink=False)
+
         # Vertical paned: Editor Tabs on top, PythonPadPanel on bottom
-        self.paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
+        self.vpaned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
+        self.paned = self.vpaned  # Maintain self.paned compatibility
 
         # Multi-tab Notebook
         self.notebook_tabs = Gtk.Notebook()
         self.notebook_tabs.set_scrollable(True)
         self.notebook_tabs.connect("switch-page", self._on_tab_switched)
-        self.paned.pack1(self.notebook_tabs, resize=True, shrink=False)
+        self.vpaned.pack1(self.notebook_tabs, resize=True, shrink=False)
 
         # Bottom Panel (Shell, Runner, Linter)
         self.panel = PythonPadPanel(lambda: self.get_current_editor())
@@ -556,9 +671,12 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.panel.connect("close-requested", lambda p: self.toggle_bottom_panel(force_show=False))
         self.panel.set_no_show_all(True)
         self.panel.set_visible(False)
-        self.paned.pack2(self.panel, resize=False, shrink=True)
+        self.vpaned.pack2(self.panel, resize=False, shrink=True)
 
-        self.vbox.pack_start(self.paned, True, True, 0)
+        self.hpaned.pack2(self.vpaned, resize=True, shrink=True)
+        self.hpaned.set_position(self._saved_sidebar_pos)
+
+        self.vbox.pack_start(self.hpaned, True, True, 0)
         self.add(self.vbox)
 
     def _build_status_bar(self):
@@ -726,6 +844,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             percent = editor.get_zoom_percent()
             self.btn_zoom_reset.set_label(f"{percent}%")
             self.lbl_zoom.set_text(f"Retina: {percent}%")
+            if editor.file_path and hasattr(self, 'project_sidebar') and self.project_sidebar.get_visible():
+                self.project_sidebar.highlight_file(editor.file_path)
 
     def _call_editor(self, method_name, *args):
         ed = self.get_current_editor()
@@ -749,10 +869,15 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             ("n", Gdk.ModifierType.CONTROL_MASK, lambda: self.new_tab()),
             ("t", Gdk.ModifierType.CONTROL_MASK, lambda: self.new_tab()),
             ("o", Gdk.ModifierType.CONTROL_MASK, lambda: self.on_open()),
+            ("o", Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK, lambda: self.on_open_folder()),
             ("s", Gdk.ModifierType.CONTROL_MASK, lambda: self.on_save()),
             ("s", Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK, lambda: self.on_save_as()),
             ("w", Gdk.ModifierType.CONTROL_MASK, lambda: self.close_current_tab()),
             ("q", Gdk.ModifierType.CONTROL_MASK, lambda: self.close()),
+
+            # Project Sidebar Toggle
+            ("b", Gdk.ModifierType.CONTROL_MASK, lambda: self.toggle_project_sidebar()),
+            ("F9", 0, lambda: self.toggle_project_sidebar()),
 
             # Python Execution
             ("F5", 0, lambda: self.run_active_script()),
@@ -1010,6 +1135,9 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             self.lbl_encoding.set_text(f"{editor.file_encoding} | {editor.line_ending}")
             if self.panel.get_visible() and self.panel.tab_btn_lint.get_active():
                 self.panel.run_lint()
+        if hasattr(self, 'project_sidebar'):
+            self.project_sidebar.refresh()
+            self.project_sidebar.highlight_file(path)
 
     def _update_tab_label(self, editor):
         page_num = self.notebook_tabs.page_num(editor)
@@ -1026,18 +1154,110 @@ class PythonPadWindow(Gtk.ApplicationWindow):
 
     def update_title(self):
         ed = self.get_current_editor()
+        proj = self.project_sidebar.get_project_root() if hasattr(self, "project_sidebar") else None
+        proj_badge = f" [{os.path.basename(proj)}]" if proj else ""
+
         if not ed:
-            self.set_title(self.APP_NAME)
-            self.header.set_subtitle("")
+            self.set_title(f"{self.APP_NAME}{proj_badge}")
+            self.header.set_subtitle(os.path.basename(proj) if proj else "")
             return
 
         base_name = os.path.basename(ed.file_path) if ed.file_path else "Untitled"
         mod = "● " if ed.is_modified() else ""
-        self.set_title(f"{mod}{base_name} - {self.APP_NAME}")
-        self.header.set_subtitle(f"{mod}{base_name}")
+        self.set_title(f"{mod}{base_name}{proj_badge} - {self.APP_NAME}")
+        self.header.set_subtitle(f"{mod}{base_name}{proj_badge}")
 
     def _update_stats_display(self, stats):
         self.lbl_stats.set_text(f"{stats['total_lines']} lines, {stats['word_count']} words, {stats['char_count']} chars")
+
+    # --------------------------------------------------------------------------
+    # Project & Workspace Management
+    # --------------------------------------------------------------------------
+    def _on_btn_sidebar_toggled(self, widget):
+        self.toggle_project_sidebar(widget.get_active())
+
+    def toggle_project_sidebar(self, force_state=None):
+        """Toggle or set project file structure sidebar visibility."""
+        if force_state is not None:
+            target = bool(force_state)
+        else:
+            target = not self.project_sidebar.get_visible()
+
+        if target:
+            pos = getattr(self, "_saved_sidebar_pos", 240) or 240
+            self.project_sidebar.set_visible(True)
+            self.hpaned.set_position(max(180, pos))
+        else:
+            cur = self.hpaned.get_position()
+            if cur > 50:
+                self._saved_sidebar_pos = cur
+            self.project_sidebar.set_visible(False)
+
+        if hasattr(self, 'btn_sidebar') and self.btn_sidebar.get_active() != target:
+            try:
+                self.btn_sidebar.handler_block_by_func(self._on_btn_sidebar_toggled)
+                self.btn_sidebar.set_active(target)
+                self.btn_sidebar.handler_unblock_by_func(self._on_btn_sidebar_toggled)
+            except Exception:
+                pass
+
+        if hasattr(self, 'menu_sidebar') and self.menu_sidebar.get_active() != target:
+            self.menu_sidebar.set_active(target)
+
+        self._save_session_state()
+
+    def open_file_from_tree(self, path: str):
+        """Open or focus a file clicked in the project sidebar tree."""
+        if path and os.path.isfile(path):
+            ed = self.new_tab(path)
+            if ed and hasattr(ed, "source_view"):
+                ed.source_view.grab_focus()
+
+    def on_open_folder(self):
+        """Open native folder chooser to select an active project root."""
+        self.project_sidebar.on_open_folder_dialog()
+
+    def open_project_folder(self, folder_path: str):
+        """Set project root and ensure the project tree sidebar is visible."""
+        if folder_path and os.path.isdir(folder_path):
+            self.project_sidebar.set_project_root(folder_path)
+            self.toggle_project_sidebar(force_state=True)
+            self.update_title()
+            self._save_session_state()
+
+    def _on_project_changed(self, root_path: str):
+        self.update_title()
+        self._save_session_state()
+
+    def _get_current_file_path(self) -> Optional[str]:
+        ed = self.get_current_editor()
+        if ed and ed.file_path:
+            return ed.file_path
+        return None
+
+    def _on_tree_file_renamed(self, old_path: str, new_path: str):
+        """Update open editor tab if its underlying file was renamed in the tree."""
+        abs_old = os.path.abspath(old_path)
+        abs_new = os.path.abspath(new_path)
+        for i in range(self.notebook_tabs.get_n_pages()):
+            ed = self.notebook_tabs.get_nth_page(i)
+            if ed.file_path and os.path.abspath(ed.file_path) == abs_old:
+                ed.file_path = abs_new
+                ed.set_syntax_from_filename(abs_new)
+                self._update_tab_label(ed)
+                if ed == self.get_current_editor():
+                    self.update_title()
+
+    def _on_tree_file_deleted(self, deleted_path: str):
+        """Close editor tab if its underlying file was deleted in the tree."""
+        abs_del = os.path.abspath(deleted_path)
+        i = 0
+        while i < self.notebook_tabs.get_n_pages():
+            ed = self.notebook_tabs.get_nth_page(i)
+            if ed.file_path and os.path.abspath(ed.file_path) == abs_del:
+                self.close_tab(i)
+            else:
+                i += 1
 
     # --------------------------------------------------------------------------
     # File Operations
@@ -1265,6 +1485,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         # Stop any active background script runner before quitting
         if hasattr(self, 'panel') and self.panel.runner.is_running:
             self.panel.runner.stop()
+        self._save_session_state()
         return False
 
 

@@ -12,7 +12,7 @@ echo " Installing PythonPad for Linux Mint Cinnamon"
 echo " (Python IDE with System Base Interpreter)"
 echo "=========================================================="
 
-chmod +x "$DIR/run.sh" "$DIR/pythonpad.py"
+chmod +x "$DIR/run.sh" "$DIR/pythonpad.py" "$DIR/project_tree.py"
 
 mkdir -p "$APP_DIR"
 mkdir -p "$ICONS_DIR"
