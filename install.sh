@@ -8,11 +8,11 @@ BIN_DIR="$HOME/.local/bin"
 STYLES_DIR="$HOME/.local/share/gtksourceview-4/styles"
 
 echo "=========================================================="
-echo " Installing PythonPad for Linux Mint Cinnamon"
+echo " Installing PythonPanel for Linux Mint Cinnamon"
 echo " (Python IDE with System Base Interpreter)"
 echo "=========================================================="
 
-chmod +x "$DIR/run.sh" "$DIR/pythonpad.py" "$DIR/project_tree.py"
+chmod +x "$DIR/run.sh" "$DIR/pythonpanel.py" "$DIR/project_tree.py"
 
 mkdir -p "$APP_DIR"
 mkdir -p "$ICONS_DIR"
@@ -20,48 +20,48 @@ mkdir -p "$BIN_DIR"
 mkdir -p "$STYLES_DIR"
 
 # 1. Install high-DPI vector icon & multi-size PNG icons for Cinnamon panel / menus
-cp -f "$DIR/pythonpad.svg" "$ICONS_DIR/pythonpad.svg"
+cp -f "$DIR/pythonpanel.svg" "$ICONS_DIR/pythonpanel.svg"
 mkdir -p "$HOME/.icons" "$HOME/.local/share/pixmaps"
-cp -f "$DIR/pythonpad.svg" "$HOME/.icons/pythonpad.svg"
-cp -f "$DIR/pythonpad.svg" "$HOME/.local/share/pixmaps/pythonpad.svg"
+cp -f "$DIR/pythonpanel.svg" "$HOME/.icons/pythonpanel.svg"
+cp -f "$DIR/pythonpanel.svg" "$HOME/.local/share/pixmaps/pythonpanel.svg"
 
 python3 -B -c "
 import os, gi
 gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import GdkPixbuf
-src = '$DIR/pythonpad.svg'
+src = '$DIR/pythonpanel.svg'
 base = os.path.expanduser('~/.local/share/icons/hicolor')
 for sz in (16, 24, 32, 48, 64, 128, 256, 512):
     out_dir = os.path.join(base, f'{sz}x{sz}', 'apps')
     os.makedirs(out_dir, exist_ok=True)
     pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(src, sz, sz, True)
-    pb.savev(os.path.join(out_dir, 'pythonpad.png'), 'png', [], [])
+    pb.savev(os.path.join(out_dir, 'pythonpanel.png'), 'png', [], [])
 " 2>/dev/null || true
 
-echo "[+] Installed PythonPad SVG & panel icon set: $ICONS_DIR/pythonpad.svg"
+echo "[+] Installed PythonPanel SVG & panel icon set: $ICONS_DIR/pythonpanel.svg"
 if [ -d "$DIR/styles" ]; then
     cp -r "$DIR/styles/"* "$STYLES_DIR/"
     echo "[+] Installed GtkSource style schemes: $STYLES_DIR"
 fi
 
 # 2. Install executable launcher in ~/.local/bin
-ln -sf "$DIR/run.sh" "$BIN_DIR/pythonpad"
-echo "[+] Created CLI executable link: $BIN_DIR/pythonpad"
+ln -sf "$DIR/run.sh" "$BIN_DIR/pythonpanel"
+echo "[+] Created CLI executable link: $BIN_DIR/pythonpanel"
 
 # 3. Write desktop launcher for Cinnamon Menu and Panel
-cat <<EOF > "$APP_DIR/pythonpad.desktop"
+cat <<EOF > "$APP_DIR/pythonpanel.desktop"
 [Desktop Entry]
-Name=PythonPad
+Name=PythonPanel
 Comment=Python IDE and code editor with Retina Vision, interactive shell, and system base Python runner
 GenericName=Python IDE & Code Editor
 Exec=$DIR/run.sh %F
-Icon=$ICONS_DIR/pythonpad.svg
+Icon=$ICONS_DIR/pythonpanel.svg
 Terminal=false
 Type=Application
 Categories=GTK;GNOME;Development;IDE;Utility;TextEditor;
 MimeType=text/plain;text/x-python;text/x-python3;application/x-python-code;text/markdown;text/x-shellscript;
 StartupNotify=true
-StartupWMClass=pythonpad
+StartupWMClass=pythonpanel
 Keywords=python;editor;ide;retina;vision;pylint;shell;repl;code;text;developer;
 Actions=NewWindow;
 
@@ -70,14 +70,15 @@ Name=Open a New Window
 Exec=$DIR/run.sh
 EOF
 
-chmod +x "$APP_DIR/pythonpad.desktop"
-echo "[+] Installed desktop entry: $APP_DIR/pythonpad.desktop"
+chmod +x "$APP_DIR/pythonpanel.desktop"
+echo "[+] Installed desktop entry: $APP_DIR/pythonpanel.desktop"
 
-# Clean up older retinapad launcher if present
-if [ -f "$APP_DIR/retinapad.desktop" ]; then
-    rm -f "$APP_DIR/retinapad.desktop"
-    echo "[+] Cleaned up previous retinapad.desktop entry"
-fi
+# Clean up older retinapad and pythonpad launchers if present
+rm -f "$APP_DIR/retinapad.desktop" "$APP_DIR/pythonpad.desktop" "$BIN_DIR/retinapad" "$BIN_DIR/pythonpad" \
+      "$ICONS_DIR/retinapad.svg" "$ICONS_DIR/pythonpad.svg" \
+      "$HOME/.icons/pythonpad.svg" "$HOME/.local/share/pixmaps/pythonpad.svg" \
+      "$STYLES_DIR/pythonpad-neon.xml" 2>/dev/null || true
+rm -f "$HOME/.local/share/icons/hicolor/"*/apps/pythonpad.png 2>/dev/null || true
 
 # 4. Refresh desktop database & icon caches
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -88,7 +89,7 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 fi
 
-# 5. Register PythonPad as the default application for .txt and .py files
+# 5. Register PythonPanel as the default application for .txt and .py files
 DEFAULT_MIMES=(
     "text/plain"
     "text/x-python"
@@ -98,14 +99,14 @@ DEFAULT_MIMES=(
 
 if command -v xdg-mime >/dev/null 2>&1; then
     for mime in "${DEFAULT_MIMES[@]}"; do
-        xdg-mime default pythonpad.desktop "$mime" 2>/dev/null || true
+        xdg-mime default pythonpanel.desktop "$mime" 2>/dev/null || true
     done
-    echo "[+] Registered PythonPad via xdg-mime as default handler for .txt and .py files"
+    echo "[+] Registered PythonPanel via xdg-mime as default handler for .txt and .py files"
 fi
 
 if command -v gio >/dev/null 2>&1; then
     for mime in "${DEFAULT_MIMES[@]}"; do
-        gio mime "$mime" pythonpad.desktop >/dev/null 2>&1 || true
+        gio mime "$mime" pythonpanel.desktop >/dev/null 2>&1 || true
     done
 fi
 
@@ -129,7 +130,7 @@ for section in ('Default Applications', 'Added Associations'):
     if not cfg.has_section(section):
         cfg.add_section(section)
     for mime in ('text/plain', 'text/x-python', 'text/x-python3', 'application/x-python-code'):
-        cfg.set(section, mime, 'pythonpad.desktop;')
+        cfg.set(section, mime, 'pythonpanel.desktop;')
 
 with open(mimeapps_path, 'w', encoding='utf-8') as f:
     cfg.write(f, space_around_delimiters=False)
@@ -143,13 +144,11 @@ import gi
 from gi.repository import Gio
 try:
     settings = Gio.Settings.new('org.cinnamon')
-    favs = list(settings.get_strv('favorite-apps'))
-    if 'retinapad.desktop' in favs:
-        favs.remove('retinapad.desktop')
-    if 'pythonpad.desktop' not in favs:
-        favs.append('pythonpad.desktop')
+    favs = [x for x in settings.get_strv('favorite-apps') if x not in ('retinapad.desktop', 'pythonpad.desktop')]
+    if 'pythonpanel.desktop' not in favs:
+        favs.append('pythonpanel.desktop')
     settings.set_strv('favorite-apps', favs)
-    print('[+] Added PythonPad to Cinnamon favorite apps')
+    print('[+] Added PythonPanel to Cinnamon favorite apps')
 except Exception as e:
     pass
 " || true
@@ -159,13 +158,13 @@ echo ""
 echo "=========================================================="
 echo " Installation Complete!"
 echo "=========================================================="
-echo "To place PythonPad on your Linux Mint Cinnamon panel:"
+echo "To place PythonPanel on your Linux Mint Cinnamon panel:"
 echo "  1. Click your Cinnamon Menu button (bottom-left)."
-echo "  2. Search for 'PythonPad' (under Programming or Favorites)."
-echo "  3. Right-click 'PythonPad' and select 'Add to panel'."
-echo "     (Or drag the PythonPad icon from the menu and drop"
+echo "  2. Search for 'PythonPanel' (under Programming or Favorites)."
+echo "  3. Right-click 'PythonPanel' and select 'Add to panel'."
+echo "     (Or drag the PythonPanel icon from the menu and drop"
 echo "      it directly onto your panel)."
 echo ""
 echo "You can also launch it anytime from terminal by typing:"
-echo "  pythonpad"
+echo "  pythonpanel"
 echo "=========================================================="

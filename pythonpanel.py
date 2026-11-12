@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Python IDE and Code Editor
+PythonPanel - Python IDE and Code Editor
 With Retina Vision, Line Numbers, Interactive Python Shell,
 Advanced Code Editing Tools, and System Base Python Interpreter Execution.
 Designed for Linux Mint Cinnamon.
@@ -23,15 +23,15 @@ gi.require_version('Pango', '1.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GtkSource, Pango, GLib, Gio
 from editor import RetinaEditor
 from search_bar import SearchBar
-from pylint_panel import PythonPadPanel
+from pylint_panel import PythonWorkspacePanel
 from python_tools import InterpreterManager, PythonLinter
 from project_tree import ProjectSidebar
 
 
-class PythonPadWindow(Gtk.ApplicationWindow):
-    """Main application window for PythonPad."""
+class PythonPanelWindow(Gtk.ApplicationWindow):
+    """Main application window for PythonPanel."""
 
-    APP_NAME = "PythonPad"
+    APP_NAME = "PythonPanel"
     APP_VERSION = "2.2"
 
     def __init__(self, app, initial_files=None):
@@ -42,8 +42,8 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self._load_session_state()
 
         # Set application & window icon for Cinnamon panel, alt-tab, and taskbar
-        self.set_wmclass("pythonpad", "PythonPad")
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
+        self.set_wmclass("pythonpanel", "PythonPanel")
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpanel.svg")
         if os.path.exists(icon_path):
             try:
                 Gtk.Window.set_default_icon_from_file(icon_path)
@@ -61,7 +61,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         settings = Gtk.Settings.get_default()
         if settings:
             settings.set_property("gtk-application-prefer-dark-theme", True)
-        self.current_theme = "pythonpad-neon"
+        self.current_theme = "pythonpanel-neon"
         self._apply_dark_neon_theme()
 
         # UI Construction
@@ -120,7 +120,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.toggle_project_sidebar(initial_sidebar_vis)
 
     def _get_config_dir(self) -> str:
-        d = os.path.expanduser("~/.config/pythonpad")
+        d = os.path.expanduser("~/.config/pythonpanel")
         os.makedirs(d, exist_ok=True)
         return d
 
@@ -163,7 +163,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             GtkSource.StyleSchemeManager.get_default().prepend_search_path(styles_dir)
 
         css = b"""
-        /* PythonPad Dark Neon Theme */
+        /* PythonPanel Dark Neon Theme */
         window, dialog, .background {
             background-color: #0b0f19;
             color: #ffffff;
@@ -615,7 +615,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             title = scheme_obj.get_name() if scheme_obj else s_id
             radio = Gtk.RadioMenuItem(group=group[0] if group else None, label=title)
             group.append(radio)
-            if s_id == 'pythonpad-neon':
+            if s_id == 'pythonpanel-neon':
                 neon_radio = radio
             radio.connect("toggled", self._on_theme_selected, s_id)
             theme_menu.append(radio)
@@ -632,7 +632,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         menu.append(item_retina_info)
 
         # About
-        item_about = Gtk.MenuItem(label="About PythonPad")
+        item_about = Gtk.MenuItem(label="About PythonPanel")
         item_about.connect("activate", lambda w: self.on_about())
         menu.append(item_about)
 
@@ -664,7 +664,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.project_sidebar.connect("close-requested", lambda sb: self.toggle_project_sidebar(force_state=False))
         self.hpaned.pack1(self.project_sidebar, resize=False, shrink=False)
 
-        # Vertical paned: Editor Tabs on top, PythonPadPanel on bottom
+        # Vertical paned: Editor Tabs on top, PythonWorkspacePanel on bottom
         self.vpaned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
         self.paned = self.vpaned  # Maintain self.paned compatibility
 
@@ -675,7 +675,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         self.vpaned.pack1(self.notebook_tabs, resize=True, shrink=False)
 
         # Bottom Panel (Shell, Runner, Linter)
-        self.panel = PythonPadPanel(lambda: self.get_current_editor())
+        self.panel = PythonWorkspacePanel(lambda: self.get_current_editor())
         self.panel.connect("goto-location", lambda p, l, c: self._goto_editor_location(l, c))
         self.panel.connect("close-requested", lambda p: self.toggle_bottom_panel(force_show=False))
         self.panel.set_no_show_all(True)
@@ -1108,7 +1108,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             self.lbl_interp.set_text(f"Python: {ver} (Base)")
             self.panel.lbl_status.set_text(f"Base Interpreter: {active_path}")
             self.panel.shell_session.banner = (
-                f"PythonPad Interactive Shell\n"
+                f"PythonPanel Interactive Shell\n"
                 f"Interpreter: {active_path} ({ver})\n"
                 f"Type Python expressions below. Use Up/Down arrows for command history.\n"
             )
@@ -1446,7 +1446,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         ver = GLib.markup_escape_text(InterpreterManager.get_interpreter_version())
 
         text = (
-            f"<b>PythonPad Environment Diagnostics:</b>\n\n"
+            f"<b>PythonPanel Environment Diagnostics:</b>\n\n"
             f"• <b>Base Python:</b> {interp} ({ver})\n"
             f"• <b>Hardware Display Scale:</b> {scale}x ({'HiDPI / Retina Active' if scale > 1 else 'Standard DPI'})\n"
             f"• <b>Current Editor Zoom:</b> {zoom}%\n"
@@ -1456,7 +1456,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             f"• Advanced Code Editing (Multi-tab, comments, line duplication, line shift)\n"
             f"• Pylint &amp; AST Diagnostics Viewer\n"
         )
-        dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="PythonPad Diagnostics")
+        dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="PythonPanel Diagnostics")
         dialog.set_markup(text)
         dialog.run()
         dialog.destroy()
@@ -1470,9 +1470,9 @@ class PythonPadWindow(Gtk.ApplicationWindow):
             "line numbers, interactive Python shell, advanced editing operations, "
             "and system base interpreter script execution for Linux Mint Cinnamon."
         )
-        dialog.set_website("https://github.com/kyledeanml/pythonpad")
-        dialog.set_website_label("PythonPad on GitHub")
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
+        dialog.set_website("https://github.com/kyledeanml/pythonpanel")
+        dialog.set_website_label("PythonPanel on GitHub")
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpanel.svg")
         if os.path.exists(icon_path):
             try:
                 dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 96, 96, True))
@@ -1482,7 +1482,7 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         dialog.destroy()
 
     def _show_error(self, msg):
-        dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK, text="PythonPad Error")
+        dialog = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK, text="PythonPanel Error")
         dialog.format_secondary_text(str(msg))
         dialog.run()
         dialog.destroy()
@@ -1520,28 +1520,28 @@ class PythonPadWindow(Gtk.ApplicationWindow):
         return False
 
 
-class PythonPadApp(Gtk.Application):
+class PythonPanelApp(Gtk.Application):
     def __init__(self):
         super().__init__(
-            application_id="org.linuxmint.pythonpad",
+            application_id="org.linuxmint.pythonpanel",
             flags=Gio.ApplicationFlags.HANDLES_OPEN | Gio.ApplicationFlags.NON_UNIQUE
         )
         self.files_to_open = []
 
     def do_activate(self):
-        win = PythonPadWindow(self, initial_files=self.files_to_open)
+        win = PythonPanelWindow(self, initial_files=self.files_to_open)
         win.present()
 
     def do_open(self, files, n_files, hint):
         paths = [f.get_path() for f in files if f.get_path()]
-        win = PythonPadWindow(self, initial_files=paths)
+        win = PythonPanelWindow(self, initial_files=paths)
         win.present()
 
 
 def main():
-    GLib.set_prgname("pythonpad")
-    GLib.set_application_name("PythonPad")
-    app = PythonPadApp()
+    GLib.set_prgname("pythonpanel")
+    GLib.set_application_name("PythonPanel")
+    app = PythonPanelApp()
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         app.files_to_open = [os.path.abspath(f) for f in sys.argv[1:]]
     return app.run(sys.argv)

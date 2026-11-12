@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Python Tools Engine
+PythonPanel - Python Tools Engine
 Provides configurable Python interpreter execution, interactive REPL shell,
 native AST syntax verification, and Pylint diagnostics.
 """
@@ -143,7 +143,7 @@ class _ShellExitHint:
     """Safe replacement for exit()/quit() inside the in-process interactive shell."""
 
     def __repr__(self):
-        return "Use Ctrl+F6 (or Restart Shell button) to reset the shell, or Ctrl+Q to quit PythonPad."
+        return "Use Ctrl+F6 (or Restart Shell button) to reset the shell, or Ctrl+Q to quit PythonPanel."
 
     def __call__(self, code=None):
         print(self.__repr__())
@@ -178,7 +178,7 @@ class InteractiveShellSession:
         self.locals = self._create_clean_locals()
         self.console = code.InteractiveConsole(self.locals)
         self.banner = (
-            f"PythonPad Interactive Shell\n"
+            f"PythonPanel Interactive Shell\n"
             f"Interpreter: {InterpreterManager.get_active_interpreter()} ({InterpreterManager.get_interpreter_version()})\n"
             f"Type Python expressions below. Use Up/Down arrows for command history.\n"
         )
@@ -200,7 +200,7 @@ class InteractiveShellSession:
         exit_hint = _ShellExitHint()
         return {
             '__name__': '__main__',
-            '__doc__': 'PythonPad Interactive Shell',
+            '__doc__': 'PythonPanel Interactive Shell',
             '__package__': None,
             'exit': exit_hint,
             'quit': exit_hint,
@@ -345,7 +345,7 @@ class PythonLinter:
 
         if not target_path or not os.path.exists(target_path) or content is not None:
             try:
-                fd, temp_file = tempfile.mkstemp(prefix="pythonpad_lint_", suffix=".py")
+                fd, temp_file = tempfile.mkstemp(prefix="pythonpanel_lint_", suffix=".py")
                 with os.fdopen(fd, "w", encoding="utf-8", errors="replace") as f:
                     f.write(content if content else "")
                 target_path = temp_file

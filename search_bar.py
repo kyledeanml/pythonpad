@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Search & Replace Component
+PythonPanel - Search & Replace Component
 Provides an integrated search and replace overlay/bar with GtkSource.SearchContext.
 Supports dynamic editor attachment across multiple document tabs.
 """

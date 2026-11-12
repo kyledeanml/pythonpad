@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Editor Component
+PythonPanel - Editor Component
 Provides a high-DPI (Retina) optimized text view using GtkSourceView 4.
 """
 
@@ -82,7 +82,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
         # Apply default font & theme
         self.apply_retina_font()
-        self.set_theme("pythonpad-neon")  # Dark mode with white and neon blue hue
+        self.set_theme("pythonpanel-neon")  # Dark mode with white and neon blue hue
 
         if file_path:
             expanded = os.path.abspath(os.path.expanduser(file_path))
@@ -161,10 +161,10 @@ class RetinaEditor(Gtk.ScrolledWindow):
 
     @classmethod
     def _get_watermark_pixbuf(cls):
-        """Load and cache the official PythonPad SVG (Python logo on yoga pad) for the editor background."""
+        """Load and cache the official PythonPanel SVG (Python logo on yoga pad) for the editor background."""
         if not cls._watermark_loaded:
             cls._watermark_loaded = True
-            svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpad.svg")
+            svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pythonpanel.svg")
             if os.path.exists(svg_path):
                 try:
                     cls._watermark_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
@@ -333,7 +333,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
         manager = GtkSource.StyleSchemeManager.get_default()
         scheme = manager.get_scheme(scheme_id)
         if not scheme:
-            for fallback in ['pythonpad-neon', 'oblivion', 'cobalt', 'xed', 'classic']:
+            for fallback in ['pythonpanel-neon', 'oblivion', 'cobalt', 'xed', 'classic']:
                 scheme = manager.get_scheme(fallback)
                 if scheme:
                     break
@@ -780,7 +780,7 @@ class RetinaEditor(Gtk.ScrolledWindow):
                 pass
 
         if not is_symlink and os.access(target_dir, os.W_OK):
-            fd, tmp_path = tempfile.mkstemp(prefix=".pythonpad_save_", dir=target_dir)
+            fd, tmp_path = tempfile.mkstemp(prefix=".pythonpanel_save_", dir=target_dir)
             try:
                 with os.fdopen(fd, 'wb') as f:
                     f.write(encoded_bytes)

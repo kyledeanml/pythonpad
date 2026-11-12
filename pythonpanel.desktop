@@ -1,15 +1,15 @@
 [Desktop Entry]
-Name=PythonPad
+Name=PythonPanel
 Comment=Python IDE and code editor with Retina Vision, interactive shell, and system base Python runner
 GenericName=Python IDE & Code Editor
 Exec=run.sh %F
-Icon=pythonpad
+Icon=pythonpanel
 Terminal=false
 Type=Application
 Categories=GTK;GNOME;Development;IDE;Utility;TextEditor;
 MimeType=text/plain;text/x-python;text/x-python3;application/x-python-code;text/markdown;text/x-shellscript;
 StartupNotify=true
-StartupWMClass=pythonpad
+StartupWMClass=pythonpanel
 Keywords=python;editor;ide;retina;vision;pylint;shell;repl;code;text;developer;
 Actions=NewWindow;
 

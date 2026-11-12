@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit and Integration Tests for PythonPad
+Unit and Integration Tests for PythonPanel
 Tests interactive REPL, system interpreter execution, advanced editing operations,
 retina zoom scaling, and desktop asset integrity.
 """
@@ -131,8 +131,8 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
         manager = GtkSource.StyleSchemeManager.get_default()
         schemes = manager.get_scheme_ids()
         self.assertTrue(len(schemes) > 0)
-        self.assertIn('pythonpad-neon', schemes)
-        neon_scheme = manager.get_scheme('pythonpad-neon')
+        self.assertIn('pythonpanel-neon', schemes)
+        neon_scheme = manager.get_scheme('pythonpanel-neon')
         self.assertIsNotNone(neon_scheme)
         self.assertEqual(neon_scheme.get_name(), 'Neon Blue & White')
 
@@ -141,7 +141,7 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
         from gi.repository import Gdk
         if Gdk.Display.get_default() is None:
             self.skipTest("Requires active X11/Wayland display connection for GtkWidget instantiation")
-        ed = RetinaEditor(file_path="/tmp/nonexistent_pythonpad_test_file.py")
+        ed = RetinaEditor(file_path="/tmp/nonexistent_pythonpanel_test_file.py")
         self.assertIsNotNone(ed.file_path)
         ed.set_text("a = 'hello\\x00world'\x00\nb = '# not a comment'\n")
         self.assertNotIn("\x00", ed.get_text())
@@ -160,8 +160,8 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
-            if os.path.exists("/tmp/nonexistent_pythonpad_test_file.py"):
-                os.unlink("/tmp/nonexistent_pythonpad_test_file.py")
+            if os.path.exists("/tmp/nonexistent_pythonpanel_test_file.py"):
+                os.unlink("/tmp/nonexistent_pythonpanel_test_file.py")
 
     def test_gui_interactive_shell_and_f5_runner(self):
         gi.require_version('Gdk', '3.0')
@@ -170,8 +170,8 @@ class TestEditorLogicAndPowerEditing(unittest.TestCase):
         if Gdk.Display.get_default() is None:
             self.skipTest("Requires active X11/Wayland display connection for GUI verification")
 
-        from pythonpad import PythonPadWindow
-        win = PythonPadWindow(app=None)
+        from pythonpanel import PythonPanelWindow
+        win = PythonPanelWindow(app=None)
         try:
             # 1. Verify bottom panel and Interactive Shell visibility & execution
             win.toggle_bottom_panel(force_show=True, tab_index=0)
@@ -224,8 +224,8 @@ class TestAppAssets(unittest.TestCase):
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
 
     def test_svg_icon_validity(self):
-        svg_path = os.path.join(self.base_dir, "pythonpad.svg")
-        self.assertTrue(os.path.exists(svg_path), "pythonpad.svg does not exist")
+        svg_path = os.path.join(self.base_dir, "pythonpanel.svg")
+        self.assertTrue(os.path.exists(svg_path), "pythonpanel.svg does not exist")
 
         tree = ET.parse(svg_path)
         root = tree.getroot()
@@ -234,24 +234,24 @@ class TestAppAssets(unittest.TestCase):
         self.assertIsNotNone(RetinaEditor._get_watermark_pixbuf())
 
     def test_desktop_file_exists(self):
-        desktop_path = os.path.join(self.base_dir, "pythonpad.desktop")
-        self.assertTrue(os.path.exists(desktop_path), "pythonpad.desktop does not exist")
+        desktop_path = os.path.join(self.base_dir, "pythonpanel.desktop")
+        self.assertTrue(os.path.exists(desktop_path), "pythonpanel.desktop does not exist")
         with open(desktop_path, 'r') as f:
             content = f.read()
         self.assertIn("[Desktop Entry]", content)
-        self.assertIn("Name=PythonPad", content)
-        self.assertIn("StartupWMClass=pythonpad", content)
+        self.assertIn("Name=PythonPanel", content)
+        self.assertIn("StartupWMClass=pythonpanel", content)
         self.assertIn("text/plain;", content)
         self.assertIn("text/x-python;", content)
 
         install_path = os.path.join(self.base_dir, "install.sh")
         with open(install_path, 'r') as f:
             install_content = f.read()
-        self.assertIn("xdg-mime default pythonpad.desktop", install_content)
+        self.assertIn("xdg-mime default pythonpanel.desktop", install_content)
         self.assertIn("mimeapps.list", install_content)
 
     def test_scripts_executable(self):
-        for script in ['run.sh', 'install.sh', 'pythonpad.py', 'project_tree.py']:
+        for script in ['run.sh', 'install.sh', 'pythonpanel.py', 'project_tree.py']:
             path = os.path.join(self.base_dir, script)
             self.assertTrue(os.access(path, os.X_OK) or script == 'project_tree.py', f"{script} is not accessible")
 
@@ -260,7 +260,7 @@ class TestProjectSidebar(unittest.TestCase):
     """Test Project File Structure sidebar, tree scanning, filtering, and toggle operations."""
 
     def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp(prefix="pythonpad_proj_test_")
+        self.tmp_dir = tempfile.mkdtemp(prefix="pythonpanel_proj_test_")
         # Create a mock project structure:
         # root/
         #   src/
@@ -358,8 +358,8 @@ class TestProjectSidebar(unittest.TestCase):
         if Gdk.Display.get_default() is None:
             self.skipTest("Requires active X11/Wayland display connection for GUI verification")
 
-        from pythonpad import PythonPadWindow
-        win = PythonPadWindow(app=None, initial_files=[self.tmp_dir])
+        from pythonpanel import PythonPanelWindow
+        win = PythonPanelWindow(app=None, initial_files=[self.tmp_dir])
         try:
             self.assertEqual(win.project_sidebar.get_project_root(), self.tmp_dir)
             self.assertTrue(win.project_sidebar.get_visible())
@@ -398,8 +398,8 @@ class TestProjectSidebar(unittest.TestCase):
         if Gdk.Display.get_default() is None:
             self.skipTest("Requires active X11/Wayland display connection for GUI verification")
 
-        from pythonpad import PythonPadWindow
-        win = PythonPadWindow(app=None)
+        from pythonpanel import PythonPanelWindow
+        win = PythonPanelWindow(app=None)
         try:
             # 1. Sidebar should not be blank: scrolled_tree must be visible
             self.assertTrue(win.project_sidebar.scrolled_tree.get_visible())

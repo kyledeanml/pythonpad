@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Project File Structure Tree & Sidebar
+PythonPanel - Project File Structure Tree & Sidebar
 Provides hierarchical directory browsing, folder expand/collapse, file activation,
 context actions (New File, New Folder, Rename, Delete, Reveal in File Manager),
 and toggleable sidebar state for traditional IDE workflow.
@@ -43,7 +43,7 @@ IGNORED_EXTENSIONS = ('.pyc', '.pyo', '.swp', '.swo', '~')
 
 class ProjectSidebar(Gtk.Box):
     """
-    Project File Structure sidebar panel for PythonPad.
+    Project File Structure sidebar panel for PythonPanel.
     Displays an interactive directory tree with expand/collapse, file opening,
     refresh, and right-click management tools.
     """
@@ -765,7 +765,7 @@ class ProjectSidebar(Gtk.Box):
         dialog.destroy()
 
     def _on_open_active_file_folder(self):
-        """Open the directory containing the currently active file in PythonPad."""
+        """Open the directory containing the currently active file in PythonPanel."""
         if self.get_active_file_callback:
             active_file = self.get_active_file_callback()
             if active_file and os.path.exists(active_file):

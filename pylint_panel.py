@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PythonPad - Bottom Workspace Panel
+PythonPanel - Bottom Workspace Panel
 Provides:
   1. Interactive Python Shell (REPL with persistent session and history)
   2. Script Runner Console (executing with system base interpreter + interactive stdin)
@@ -25,7 +25,7 @@ from python_tools import (
 )
 
 
-class PythonPadPanel(Gtk.Box):
+class PythonWorkspacePanel(Gtk.Box):
     """
     Bottom docked workspace panel housing:
     - Interactive Python Shell

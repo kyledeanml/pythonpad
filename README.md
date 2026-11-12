@@ -1,7 +1,7 @@
-# PythonPad
+# PythonPanel
 
 <p align="center">
-  <img src="pythonpad.svg" alt="PythonPad Logo" width="160" height="160">
+  <img src="pythonpanel.svg" alt="PythonPanel Logo" width="160" height="160">
 </p>
 
 A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic font scaling, subpixel anti-aliasing), **Line Numbers**, **Multi-Tab Document Editing**, **Interactive Python Shell**, and **System Base Python Interpreter Execution**, built natively for **Linux Mint Cinnamon** using Python 3, GTK 3, and GtkSourceView 4.
@@ -42,7 +42,7 @@ A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic 
 ### Retina Vision (HiDPI & Sharp Typography)
 - **Dynamic Retina Zooming**: Scale font size fluidly from **50% up to 300%** using keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`) or by holding **`Ctrl` while scrolling the mouse wheel**.
 - **Cairo Subpixel Anti-Aliasing**: Fine-tuned CSS rules and Pango font descriptions preserve crisp glyph rendering on high-resolution displays (Full HD, 2K, 3K, 4K, and Apple Retina screens).
-- **Scalable Vector Artwork**: High-definition SVG application icon (`pythonpad.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
+- **Scalable Vector Artwork**: High-definition SVG application icon (`pythonpanel.svg`) that scales sharply at 100%, 125%, 150%, 175%, or 200% Cinnamon desktop scaling.
 - **Retina Diagnostics**: Built-in monitor resolution, display scale factor, and Cairo subpixel diagnostics dialog (*Menu -> Retina Vision / HiDPI Info*).
 
 ### Crisp Line Numbers & Navigation
@@ -57,9 +57,9 @@ A fast, modern Python IDE and code editor with **Retina Vision** (HiDPI dynamic 
 - **Advanced Match Options**: Toggle Case Sensitivity (`Aa`), Regular Expressions (`.*`), and Whole Word (`\b`).
 
 ### Themes & Customization
-- **Dark Mode UI & Neon Blue Accents**: Native GTK dark mode interface featuring crisp white typography, neon cyan/blue indicators, active tab glowing accents, and custom GtkSourceView style scheme (`pythonpad-neon`).
+- **Dark Mode UI & Neon Blue Accents**: Native GTK dark mode interface featuring crisp white typography, neon cyan/blue indicators, active tab glowing accents, and custom GtkSourceView style scheme (`pythonpanel-neon`).
 - **GtkSource Style Schemes**: Switch between color themes (*Menu -> Color Theme*):
-  - `pythonpad-neon` (Default: Dark mode with brilliant white text and neon blue accents)
+  - `pythonpanel-neon` (Default: Dark mode with brilliant white text and neon blue accents)
   - `xed` (Linux Mint native look)
   - `solarized-dark` & `solarized-light` (Designed to reduce eye strain)
   - `oblivion` & `cobalt` (High-contrast dark modes)
@@ -87,8 +87,8 @@ sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gtkso
 
 ### 2. Clone Repository
 ```bash
-git clone https://github.com/kyledeanml/pythonpad.git
-cd pythonpad
+git clone https://github.com/kyledeanml/pythonpanel.git
+cd pythonpanel
 ```
 
 ### 3. Run Installer
@@ -96,18 +96,18 @@ cd pythonpad
 ./install.sh
 ```
 The installer automatically:
-- Installs the high-DPI vector icon into `~/.local/share/icons/hicolor/scalable/apps/pythonpad.svg`.
-- Installs the desktop launcher with `StartupWMClass=pythonpad` for window grouping into `~/.local/share/applications/pythonpad.desktop`.
-- Creates a CLI binary symlink at `~/.local/bin/pythonpad`.
-- Registers PythonPad as the default application for opening `.txt` (`text/plain`) and `.py` (`text/x-python`, `text/x-python3`, `application/x-python-code`) files in Linux Mint Cinnamon / Nemo.
-- Adds PythonPad to Cinnamon's application favorites.
+- Installs the high-DPI vector icon into `~/.local/share/icons/hicolor/scalable/apps/pythonpanel.svg`.
+- Installs the desktop launcher with `StartupWMClass=pythonpanel` for window grouping into `~/.local/share/applications/pythonpanel.desktop`.
+- Creates a CLI binary symlink at `~/.local/bin/pythonpanel`.
+- Registers PythonPanel as the default application for opening `.txt` (`text/plain`) and `.py` (`text/x-python`, `text/x-python3`, `application/x-python-code`) files in Linux Mint Cinnamon / Nemo.
+- Adds PythonPanel to Cinnamon's application favorites.
 
-### 4. Put PythonPad on the Cinnamon Panel
-Once installed, you can add PythonPad directly to your taskbar/panel:
+### 4. Put PythonPanel on the Cinnamon Panel
+Once installed, you can add PythonPanel directly to your taskbar/panel:
 1. Open the **Cinnamon Menu** (bottom-left corner).
-2. Find **PythonPad** (under *Programming* or *Favorites*).
-3. **Right-click** PythonPad and click **"Add to panel"**.
-*(Alternatively, drag the PythonPad icon from the menu and drop it onto the panel).*
+2. Find **PythonPanel** (under *Programming* or *Favorites*).
+3. **Right-click** PythonPanel and click **"Add to panel"**.
+*(Alternatively, drag the PythonPanel icon from the menu and drop it onto the panel).*
 
 ---
 
@@ -148,4 +148,4 @@ Once installed, you can add PythonPad directly to your taskbar/panel:
 For high-resolution monitors on Linux Mint Cinnamon:
 1. Open **System Settings -> General**.
 2. Under **Desktop Scaling**, select **Auto** or **Double (HiDPI)**.
-3. In PythonPad, you can use `Ctrl + Mouse Wheel` or the zoom buttons on the HeaderBar to adjust text readability without blurring.
+3. In PythonPanel, you can use `Ctrl + Mouse Wheel` or the zoom buttons on the HeaderBar to adjust text readability without blurring.
